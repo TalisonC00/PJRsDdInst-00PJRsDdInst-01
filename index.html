@@ -19,6 +19,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
         :root { --primary: #FF4B5C; --sky: #BAE6FD; --card: #FFFFFF; --text-main: #1E293B; --text-sub: #64748B; --money: #10B981; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); }}
+        .loading {opacity: 0.7; pointer-events: none; cursor: not-allowed;}
         
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--sky); margin: 0; padding: 0; overflow: hidden; touch-action: manipulation; color: var(--text-main); }
         .header { background: #fff; padding: 15px 16px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.03); position: relative; z-index: 100; }
@@ -311,51 +313,69 @@
     }
 }
 
-function exibirErroAuth(mensagem) {
+    function exibirErroAuth(mensagem) {
     const container = document.getElementById('auth-erro-container');
     const texto = document.getElementById('auth-erro-msg');
-    
+    const card = document.querySelector('#aba-login .card');
+
     texto.innerText = mensagem;
     container.style.display = 'block';
     
-    // Tremer o card para feedback visual de erro
-    const card = document.querySelector('#aba-login .card');
+    // Feedback visual (tremer o card)
     card.style.animation = "shake 0.4s";
     setTimeout(() => card.style.animation = "", 400);
 }
-
-function gerenciarAuth() {
-    // Esconde erro anterior ao tentar novamente
-    document.getElementById('auth-erro-container').style.display = 'none';
-
+   
+    function gerenciarAuth() {
+    const btn = document.getElementById('btn-auth-principal');
+    const containerErro = document.getElementById('auth-erro-container');
     const email = document.getElementById('auth-email').value;
     const senha = document.getElementById('auth-senha').value;
 
-    // Validação básica local (antes de ir ao Firebase)
-    if (!email.includes('@')) return exibirErroAuth("Insira um e-mail válido.");
-    if (senha.length < 6) return exibirErroAuth("A senha deve ter pelo menos 6 caracteres.");
+    // 1. Resetar estado de erro
+    containerErro.style.display = 'none';
+
+    // 2. Validações Locais Básicas
+    if (!email || !senha) return exibirErroAuth("Preencha todos os campos.");
+    if (!email.includes('@')) return exibirErroAuth("E-mail inválido.");
+
+    // 3. Ativar Estado de Carregamento
+    btn.classList.add('loading');
+    const textoOriginal = btn.innerText;
+    btn.innerText = modoCadastro ? "Criando conta..." : "Verificando...";
 
     if (modoCadastro) {
+        // --- FLUXO DE CADASTRO ---
         firebase.auth().createUserWithEmailAndPassword(email, senha)
-            .then(() => {
-                // SUCESSO: Só aqui ele avança para o Perfil
+            .then((userCredential) => {
+                // SUCESSO ABSOLUTO: Avança para o perfil
+                mostrarAlerta("Conta criada! Complete seu perfil.", "🚀");
                 trocarAba('cadastro', null);
             })
-            .catch(error => {
-                // ERRO: Fica na tela e mostra o porquê
-                let msg = traduzirErro(error.code);
-                exibirErroAuth(msg);
-            });
-    } else {
-        firebase.auth().signInWithEmailAndPassword(email, senha)
-            .then((cred) => {
-                // SUCESSO: Verifica se o perfil existe antes de entrar no mapa
-                verificarPerfilExistente(cred.user.uid);
+            .catch((error) => {
+                // ERRO: Permanece na tela de login
+                exibirErroAuth(traduzirErro(error.code));
             })
-            .catch(error => {
-                // ERRO: Fica na tela e mostra o porquê
-                let msg = traduzirErro(error.code);
-                exibirErroAuth(msg);
+            .finally(() => {
+                // Restaurar botão independente do resultado
+                btn.classList.remove('loading');
+                btn.innerText = textoOriginal;
+            });
+
+    } else {
+        // --- FLUXO DE LOGIN ---
+        firebase.auth().signInWithEmailAndPassword(email, senha)
+            .then((userCredential) => {
+                // SUCESSO: Verifica se já tem o perfil social pronto
+                verificarPerfilExistente(userCredential.user.uid);
+            })
+            .catch((error) => {
+                // ERRO: Permanece na tela de login
+                exibirErroAuth(traduzirErro(error.code));
+            })
+            .finally(() => {
+                btn.classList.remove('loading');
+                btn.innerText = textoOriginal;
             });
     }
 }
@@ -381,6 +401,21 @@ function gerenciarAuth() {
             break;
     }
     mostrarAlerta(mensagem, "❌");
+}
+    
+    function verificarPerfilExistente(uid) {
+    database.ref('usuarios/' + uid + '/perfil').once('value').then((snapshot) => {
+        if (snapshot.exists()) {
+            // O usuário tem perfil completo: Entra no App
+            usuarioLogado = snapshot.val();
+            trocarAba('mapa', document.querySelector('.btn-aba'));
+            init(); 
+        } else {
+            // O usuário logou mas não terminou o cadastro social: Manda pro Cadastro
+            mostrarAlerta("Finalize seu perfil para continuar.", "✍️");
+            trocarAba('cadastro', null);
+        }
+    });
 }
     
     function verificarUsername(nome) {
