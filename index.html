@@ -136,6 +136,39 @@
     </div>
   </div>
 
+    <div id="aba-cadastro" class="aba ativa">
+    <div class="card">
+        <h3> 🌍 Criar Conta</h3>
+        
+        <label>Foto de Perfil</label>
+        <input type="file" id="cad-foto" accept="image/*">
+        
+        <label>Nome Completo</label>
+        <input type="text" id="cad-nome" placeholder="Ex: João Silva">
+        
+        <label>Username (Único)</label>
+        <div style="position: relative;">
+            <input type="text" id="cad-username" placeholder="@viagem_casal" oninput="verificarUsername(this.value)">
+            <span id="msg-username" style="font-size: 10px; font-weight: 800; position: absolute; right: 10px; top: 15px;"></span>
+        </div>
+
+        <label>Sexo</label>
+        <select id="cad-sexo">
+            <option value="M">Masculino</option>
+            <option value="F">Feminino</option>
+            <option value="O">Outro</option>
+        </select>
+
+        <label>Tipo de Perfil</label>
+        <select id="cad-perfil">
+            <option value="publico">Viajante Brasil (Público)</option>
+            <option value="privado">Viajante Local (Privado)</option>
+        </select>
+
+        <button class="btn-acao" id="btn-finalizar-cad" onclick="finalizarCadastro()" disabled>Criar Minha Jornada 🚀</button>
+    </div>
+</div>
+    
     <div id="aba-mapa" class="aba ativa">
         <div class="mapa-card">
             <button onclick="resetarMapa()" style="position: absolute; top: 15px; right: 15px; z-index: 1000; background: white; border: 1.5px solid #F1F5F9; padding: 10px; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;">🔄</button>
