@@ -136,6 +136,35 @@
     </div>
   </div>
 
+    <div id="auth-erro-container" style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-size:12px; margin-bottom:15px; border:1px solid #fecaca; font-weight:600;">
+    <span id="auth-erro-msg"></span>
+    </div>
+    
+    <div id="aba-login" class="aba ativa" style="background: var(--sky); display: flex; align-items: center; justify-content: center; height: 100vh;">
+    <div class="card" style="width: 85%; max-width: 360px;">
+        
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h2 id="auth-titulo" style="color: var(--primary); margin: 0; font-size: 24px;">Boas-vindas!</h2>
+            <p id="auth-subtitulo" style="color: var(--text-sub); font-size: 13px; margin-top: 5px;">Entre para continuar sua jornada.</p>
+        </div>
+
+        <label>E-mail</label>
+        <input type="email" id="auth-email" placeholder="seu@email.com">
+        
+        <label>Senha</label>
+        <input type="password" id="auth-senha" placeholder="••••••••">
+
+        <button class="btn-acao" id="btn-auth-principal" onclick="gerenciarAuth()" style="margin-top: 20px;">Acessar Conta</button>
+
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #f1f5f9; text-align: center;">
+            <p id="auth-alternar-msg" style="font-size: 13px; color: var(--text-sub);">
+                Ainda não tem uma conta? <br>
+                <a href="javascript:void(0)" onclick="alternarModoAuth()" id="auth-link" style="color: var(--primary); font-weight: 800; text-decoration: none;">Cadastre-se agora</a>
+            </p>
+        </div>
+    </div>
+</div>
+    
     <div id="aba-cadastro" class="aba ativa">
     <div class="card">
         <h3> 🌍 Criar Conta</h3>
@@ -244,7 +273,10 @@
     let dbGlobal = {};
     let controleMapa;
     let conquistasAnteriores = []; // Controla o que já foi celebrado
-    
+    let usernameDisponivel = false;
+    let timeoutUsername;
+    let modoCadastro = false;
+        
     const REGIOES = {
         'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
         'NORDESTE': { icon: '🌵', color: '#FACC15', UFs: ['BRMA','BRPI','BRCE','BRRN','BRPB','BRPE','BRAL','BRSE','BRBA'], nomes: ['Maranhão','Piauí','Ceará','Rio Grande do Norte','Paraíba','Pernambuco','Alagoas','Sergipe','Bahia'] },
@@ -253,6 +285,175 @@
         'SUL': { icon: '❄️', color: '#A855F7', UFs: ['BRPR','BRSC','BRRS'], nomes: ['Paraná','Santa Catarina','Rio Grande do Sul'] }
     };
 
+    //LOGIN E CADASTRO
+    
+    function alternarModoAuth() {
+    modoCadastro = !modoCadastro; // Inverte o estado
+    
+    const titulo = document.getElementById('auth-titulo');
+    const subtitulo = document.getElementById('auth-subtitulo');
+    const btnPrincipal = document.getElementById('btn-auth-principal');
+    const linkAlternar = document.getElementById('auth-link');
+    const msgAlternar = document.getElementById('auth-alternar-msg');
+
+    if (modoCadastro) {
+        titulo.innerText = "Criar Conta";
+        subtitulo.innerText = "Comece sua jornada social agora.";
+        btnPrincipal.innerText = "Criar Minha Conta";
+        msgAlternar.innerHTML = 'Já possui uma conta? <br> <a href="javascript:void(0)" onclick="alternarModoAuth()" id="auth-link" style="color: var(--primary); font-weight: 800;">Fazer Login</a>';
+        btnPrincipal.style.background = "var(--primary)";
+    } else {
+        titulo.innerText = "Boas-vindas!";
+        subtitulo.innerText = "Entre para continuar sua jornada.";
+        btnPrincipal.innerText = "Acessar Conta";
+        msgAlternar.innerHTML = 'Ainda não tem uma conta? <br> <a href="javascript:void(0)" onclick="alternarModoAuth()" id="auth-link" style="color: var(--primary); font-weight: 800;">Cadastre-se agora</a>';
+        btnPrincipal.style.background = "var(--money)";
+    }
+}
+
+function exibirErroAuth(mensagem) {
+    const container = document.getElementById('auth-erro-container');
+    const texto = document.getElementById('auth-erro-msg');
+    
+    texto.innerText = mensagem;
+    container.style.display = 'block';
+    
+    // Tremer o card para feedback visual de erro
+    const card = document.querySelector('#aba-login .card');
+    card.style.animation = "shake 0.4s";
+    setTimeout(() => card.style.animation = "", 400);
+}
+
+function gerenciarAuth() {
+    // Esconde erro anterior ao tentar novamente
+    document.getElementById('auth-erro-container').style.display = 'none';
+
+    const email = document.getElementById('auth-email').value;
+    const senha = document.getElementById('auth-senha').value;
+
+    // Validação básica local (antes de ir ao Firebase)
+    if (!email.includes('@')) return exibirErroAuth("Insira um e-mail válido.");
+    if (senha.length < 6) return exibirErroAuth("A senha deve ter pelo menos 6 caracteres.");
+
+    if (modoCadastro) {
+        firebase.auth().createUserWithEmailAndPassword(email, senha)
+            .then(() => {
+                // SUCESSO: Só aqui ele avança para o Perfil
+                trocarAba('cadastro', null);
+            })
+            .catch(error => {
+                // ERRO: Fica na tela e mostra o porquê
+                let msg = traduzirErro(error.code);
+                exibirErroAuth(msg);
+            });
+    } else {
+        firebase.auth().signInWithEmailAndPassword(email, senha)
+            .then((cred) => {
+                // SUCESSO: Verifica se o perfil existe antes de entrar no mapa
+                verificarPerfilExistente(cred.user.uid);
+            })
+            .catch(error => {
+                // ERRO: Fica na tela e mostra o porquê
+                let msg = traduzirErro(error.code);
+                exibirErroAuth(msg);
+            });
+    }
+}
+    
+    function tratarErrosAuth(error) {
+    let mensagem = "Ocorreu um erro inesperado.";
+    
+    switch (error.code) {
+        case 'auth/email-already-in-use':
+            mensagem = "Este e-mail já está sendo usado por outra pessoa.";
+            break;
+        case 'auth/invalid-email':
+            mensagem = "O formato do e-mail não parece correto.";
+            break;
+        case 'auth/user-not-found':
+            mensagem = "Não encontramos nenhuma conta com este e-mail.";
+            break;
+        case 'auth/wrong-password':
+            mensagem = "A senha está incorreta. Tente novamente.";
+            break;
+        case 'auth/weak-password':
+            mensagem = "Escolha uma senha mais forte (mínimo 6 caracteres).";
+            break;
+    }
+    mostrarAlerta(mensagem, "❌");
+}
+    
+    function verificarUsername(nome) {
+    const msg = document.getElementById('msg-username');
+    const btn = document.getElementById('btn-finalizar-cad');
+    
+    // Limpar o username (remover espaços e símbolos)
+    nome = nome.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    document.getElementById('cad-username').value = nome;
+
+    if (nome.length < 3) {
+        msg.innerText = "MUITO CURTO";
+        msg.style.color = "orange";
+        btn.disabled = true;
+        return;
+    }
+
+    clearTimeout(timeoutUsername);
+    timeoutUsername = setTimeout(() => {
+        database.ref('usernames/' + nome).once('value').then((snapshot) => {
+            if (snapshot.exists()) {
+                msg.innerText = "❌ JÁ EXISTE";
+                msg.style.color = "red";
+                usernameDisponivel = false;
+                btn.disabled = true;
+            } else {
+                msg.innerText = "✅ DISPONÍVEL";
+                msg.style.color = "var(--money)";
+                usernameDisponivel = true;
+                btn.disabled = false;
+            }
+        });
+    }, 500); // Espera 0.5s após parar de digitar
+}
+
+async function finalizarCadastro() {
+    if (!usernameDisponivel) return;
+
+    const nome = document.getElementById('cad-nome').value;
+    const username = document.getElementById('cad-username').value;
+    const sexo = document.getElementById('cad-sexo').value;
+    const perfil = document.getElementById('cad-perfil').value;
+    const fotoFile = document.getElementById('cad-foto').files[0];
+
+    let fotoUrl = "";
+    if (fotoFile) {
+        fotoUrl = await converter(fotoFile); // Reutilizando sua função de converter imagem
+    }
+
+    // 1. Criar o usuário no Firebase Auth (Simplificado para o exemplo)
+    // Aqui assumimos que você já integrou o Firebase Auth
+    const user = firebase.auth().currentUser;
+
+    if (user) {
+        const dadosPerfil = {
+            nomeCompleto: nome,
+            username: username,
+            sexo: sexo,
+            tipoPerfil: perfil,
+            fotoPerfil: fotoUrl,
+            uid: user.uid
+        };
+
+        // 2. Salva o Perfil e reserva o Username
+        await database.ref('usuarios/' + user.uid + '/perfil').set(dadosPerfil);
+        await database.ref('usernames/' + username).set(user.uid);
+
+        mostrarAlerta("Bem vindo(a) a Rede!", "🌍");
+        trocarAba('mapa', document.querySelector('.btn-aba'));
+    }
+}
+        
+        
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
     function mostrarAlerta(msg, icon = '💡') {
         document.getElementById('alert-msg').innerText = msg;
