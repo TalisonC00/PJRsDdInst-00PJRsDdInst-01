@@ -270,6 +270,19 @@
 
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
+    firebase.auth().onAuthStateChanged((user) => {
+    if (user) {
+        // O usuário está autenticado no Firebase Auth
+        console.log("Usuário autenticado:", user.uid);
+        verificarPerfilExistente(user.uid);
+    } else {
+        // Ninguém logado: Força a tela de login
+        console.log("Nenhum usuário logado.");
+        trocarAba('login', null);
+        // Esconde o menu de navegação para não logados
+        document.getElementById('menu-inferior').style.display = 'none';
+    }
+});
 
     // 2. VARIÁVEIS GLOBAIS
     let dbGlobal = {};
@@ -278,6 +291,7 @@
     let usernameDisponivel = false;
     let timeoutUsername;
     let modoCadastro = false;
+    let uidSendoVisualizado = null;
         
     const REGIOES = {
         'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
