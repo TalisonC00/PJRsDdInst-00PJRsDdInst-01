@@ -90,6 +90,42 @@
     </div>
 
     <div id="popup-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;display:none;backdrop-filter:blur(4px);" onclick="fecharPopup()"></div>
+
+    <div id="aba-busca" class="aba">
+    <div class="card">
+        <h3 style="color: var(--primary); margin-bottom: 15px;">🔍 Encontrar Viajantes</h3>
+        <div style="position: relative;">
+            <input type="text" id="input-busca" placeholder="Buscar por nome ou @username..." 
+                   oninput="buscarUsuarios(this.value)" 
+                   style="padding-right: 40px;">
+        </div>
+
+        <div id="aba-notificacoes" class="aba">
+    <div class="card">
+        <h3 style="color: var(--primary); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+            🔔 Notificações <span id="badget-notif" style="display:none; background:red; color:white; font-size:10px; padding:2px 6px; border-radius:10px;">0</span>
+        </h3>
+
+        <div id="secao-pedidos" style="margin-bottom: 25px;">
+            <p style="font-size: 12px; font-weight: 800; color: var(--text-sub); text-transform: uppercase;">Pedidos de Amizade</p>
+            <div id="lista-pedidos" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+        <div id="secao-atividades">
+            <p style="font-size: 12px; font-weight: 800; color: var(--text-sub); text-transform: uppercase;">Atividade</p>
+            <div id="lista-atividades" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                </div>
+        </div>
+    </div>
+</div>
+        
+        <div id="lista-busca" style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
+            </div>
+    </div>
+   </div>
     
     <div id="photo-popup">
         <button class="close-popup" onclick="fecharPopup()">✕</button>
@@ -503,8 +539,100 @@
     }
 }
         
+    /**
+ * Busca usuários no Firebase e renderiza a lista de resultados.
+ */
+function buscarUsuarios(termo) {
+    const lista = document.getElementById('lista-busca');
+    termo = termo.toLowerCase().trim();
+
+    if (termo.length < 2) {
+        lista.innerHTML = '<p style="color:var(--text-sub); font-size:12px; text-align:center;">Digite pelo menos 2 caracteres...</p>';
+        return;
+    }
+
+    // Buscamos todos os usuários (Em uma rede muito grande, usaríamos filtros de servidor)
+    database.ref('usuarios').once('value').then(snapshot => {
+        let html = '';
+        snapshot.forEach(child => {
+            const u = child.val().perfil;
+            if (!u) return;
+
+            // Filtra por nome ou username
+            if (u.nomeCompleto.toLowerCase().includes(termo) || u.username.toLowerCase().includes(termo)) {
+                // Não mostrar o próprio usuário na busca
+                if (u.uid === usuarioLogado.uid) return;
+
+                html += `
+                    <div class="card-usuario" style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; padding:12px; border-radius:16px;">
+                        <div style="display:flex; align-items:center; gap:12px; cursor:pointer;" onclick="irParaPerfil('${u.uid}')">
+                            <img src="${u.fotoPerfil || 'default-avatar.png'}" style="width:45px; height:45px; border-radius:50%; object-fit:cover; border:2px solid var(--primary);">
+                            <div>
+                                <p style="margin:0; font-weight:700; font-size:14px;">${u.nomeCompleto}</p>
+                                <p style="margin:0; font-size:11px; color:var(--text-sub);">@${u.username}</p>
+                            </div>
+                        </div>
+                        <button id="btn-amigo-${u.uid}" onclick="gerenciarAmizade('${u.uid}')" 
+                                style="background:var(--primary); color:white; border:none; padding:8px 12px; border-radius:10px; font-size:11px; font-weight:700; cursor:pointer;">
+                            Conectar
+                        </button>
+                    </div>
+                `;
+            }
+        });
+        lista.innerHTML = html || '<p style="text-align:center; font-size:12px;">Nenhum viajante encontrado.</p>';
         
-    // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
+        // Atualiza os estados dos botões (se já é amigo ou pendente)
+        atualizarBotoesBusca();
+    });
+}
+
+/**
+ * Redireciona para o mapa de outro usuário e fecha a aba de busca.
+ */
+function irParaPerfil(uidDestino) {
+    carregarPerfil(uidDestino);
+    trocarAba('mapa', document.querySelector('.btn-aba')); // Volta para a aba do mapa
+}    
+
+    /**
+ * Envia ou cancela um pedido de amizade.
+ */
+function gerenciarAmizade(uidDestino) {
+    const refPedido = database.ref(`pedidos_amizade/${uidDestino}/${usuarioLogado.uid}`);
+    const btn = document.getElementById(`btn-amigo-${uidDestino}`);
+
+    refPedido.once('value').then(snap => {
+        if (snap.exists()) {
+            // Se já existe pedido, vamos cancelar
+            refPedido.remove();
+            btn.innerText = "Conectar";
+            btn.style.background = "var(--primary)";
+        } else {
+            // Criar novo pedido e gerar notificação
+            refPedido.set({
+                from: usuarioLogado.uid,
+                username: usuarioLogado.username,
+                foto: usuarioLogado.fotoPerfil,
+                status: 'pendente',
+                timestamp: Date.now()
+            });
+
+            // Criar Notificação para o destinatário
+            database.ref(`notificacoes/${uidDestino}`).push({
+                tipo: 'pedido_amizade',
+                from: usuarioLogado.uid,
+                msg: `@${usuarioLogado.username} quer ser seu amigo!`,
+                lida: false
+            });
+
+            btn.innerText = "Pendente";
+            btn.style.background = "#cbd5e1";
+        }
+    });
+}
+    
+        // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
     function carregarPerfil(uidDestino) {
     // 1. Limpeza de Segurança: Desliga ouvintes do perfil anterior
     if (uidSendoVisualizado) {
