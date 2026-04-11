@@ -322,8 +322,9 @@
 
     // 2. VARIÁVEIS GLOBAIS
     let dbGlobal = {};
+    let usuarioLogado = null; // Essencial para saber quem está mexendo no app
     let controleMapa;
-    let conquistasAnteriores = []; // Controla o que já foi celebrado
+    let conquistasAnteriores = []; 
     let usernameDisponivel = false;
     let timeoutUsername;
     let modoCadastro = false;
@@ -542,7 +543,7 @@
     /**
  * Busca usuários no Firebase e renderiza a lista de resultados.
  */
-function buscarUsuarios(termo) {
+    function buscarUsuarios(termo) {
     const lista = document.getElementById('lista-busca');
     termo = termo.toLowerCase().trim();
 
@@ -590,7 +591,7 @@ function buscarUsuarios(termo) {
 /**
  * Redireciona para o mapa de outro usuário e fecha a aba de busca.
  */
-function irParaPerfil(uidDestino) {
+    function irParaPerfil(uidDestino) {
     carregarPerfil(uidDestino);
     trocarAba('mapa', document.querySelector('.btn-aba')); // Volta para a aba do mapa
 }    
@@ -598,7 +599,7 @@ function irParaPerfil(uidDestino) {
     /**
  * Envia ou cancela um pedido de amizade.
  */
-function gerenciarAmizade(uidDestino) {
+    function gerenciarAmizade(uidDestino) {
     const refPedido = database.ref(`pedidos_amizade/${uidDestino}/${usuarioLogado.uid}`);
     const btn = document.getElementById(`btn-amigo-${uidDestino}`);
 
@@ -673,7 +674,100 @@ function gerenciarAmizade(uidDestino) {
         });
     });
 }
+    function escutarNotificacoes() {
+    // 1. Escutar Pedidos de Amizade
+    database.ref(`pedidos_amizade/${usuarioLogado.uid}`).on('value', snapshot => {
+        const pedidos = snapshot.val();
+        renderizarPedidos(pedidos);
+    });
+
+    // 2. Escutar Curtidas, Comentários e Alertas
+    database.ref(`notificacoes/${usuarioLogado.uid}`).limitToLast(20).on('value', snapshot => {
+        const atividades = snapshot.val();
+        renderizarAtividades(atividades);
+    });
+}
+
+    function renderizarPedidos(pedidos) {
+    const container = document.getElementById('lista-pedidos');
+    if (!pedidos) {
+        container.innerHTML = '<p style="font-size:12px; color:#94a3b8;">Nenhum pedido pendente.</p>';
+        return;
+    }
+
+    let html = '';
+    Object.keys(pedidos).forEach(uidOrigem => {
+        const p = pedidos[uidOrigem];
+        html += `
+            <div class="card-notif" style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; padding:10px; border-radius:12px; border:1px solid #e2e8f0;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="${p.foto || 'default-avatar.png'}" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
+                    <span style="font-size:13px; font-weight:700;">@${p.username}</span>
+                </div>
+                <div style="display:flex; gap:5px;">
+                    <button onclick="responderPedido('${uidOrigem}', true)" style="background:#4ade80; border:none; color:white; padding:5px 10px; border-radius:8px; font-size:11px; font-weight:800;">Aceitar</button>
+                    <button onclick="responderPedido('${uidOrigem}', false)" style="background:#f87171; border:none; color:white; padding:5px 10px; border-radius:8px; font-size:11px; font-weight:800;">Recusar</button>
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+    function renderizarAtividades(atividades) {
+    const container = document.getElementById('lista-atividades');
+    if (!atividades) {
+        container.innerHTML = '<p style="font-size:12px; color:#94a3b8;">Nenhuma atividade recente.</p>';
+        return;
+    }
+
+    let html = '';
+    // Inverter para mostrar as mais recentes primeiro
+    Object.keys(atividades).reverse().forEach(id => {
+        const a = atividades[id];
+        const icone = a.tipo === 'curtida' ? '❤️' : a.tipo === 'comentario' ? '💬' : '✨';
+        html += `
+            <div style="display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid #f1f5f9;">
+                <span style="font-size:18px;">${icone}</span>
+                <p style="margin:0; font-size:13px; color:#334155;">${a.msg}</p>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+        
+    function responderPedido(uidOrigem, aceitou) {
+    if (aceitou) {
+        // 1. Adiciona na minha lista de amigos
+        database.ref(`amizades/${usuarioLogado.uid}/${uidOrigem}`).set(true);
+        // 2. Adiciona na lista de amigos dele
+        database.ref(`amizades/${uidOrigem}/${usuarioLogado.uid}`).set(true);
+        
+        mostrarAlerta("Agora vocês são amigos! ✈️", "✅");
+        
+        // Notifica o outro que o pedido foi aceito
+        database.ref(`notificacoes/${uidOrigem}`).push({
+            tipo: 'sistema',
+            msg: `@${usuarioLogado.username} aceitou seu pedido de amizade!`,
+            timestamp: Date.now()
+        });
+    }
+
+    // Remove o pedido pendente em qualquer caso (aceito ou recusado)
+    database.ref(`pedidos_amizade/${usuarioLogado.uid}/${uidOrigem}`).remove();
     
+    // Atualiza a nossa variável global de amigos
+    carregarMinhaListaAmigos();
+}
+
+    function carregarMinhaListaAmigos() {
+    database.ref(`amizades/${usuarioLogado.uid}`).on('value', snapshot => {
+        const amizades = snapshot.val() || {};
+        listaMeusAmigos = Object.keys(amizades); 
+        // Agora o "abrirHistorico" saberá quem é seu amigo!
+    });
+}
+        
     function mostrarAlerta(msg, icon = '💡') {
         document.getElementById('alert-msg').innerText = msg;
         document.getElementById('alert-icon').innerText = icon;
@@ -701,7 +795,7 @@ function gerenciarAmizade(uidDestino) {
 }
 
 // ESTA FUNÇÃO VAI NO BOTÃO "UHUL!" DO SEU HTML
-function fecharCelebracaoEProxima() {
+   function fecharCelebracaoEProxima() {
     // Remove a conquista que acabou de ser mostrada da fila
     filaDeConquistas.shift();
     
@@ -1148,6 +1242,8 @@ function verificarNovasConquistas() {
         renderTimeline();
         renderGastos();
         renderJornada();
+        escutarNotificacoes();
+        carregarMinhaListaAmigos();
     });
 }      
     init();
