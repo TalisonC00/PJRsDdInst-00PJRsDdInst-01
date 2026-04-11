@@ -648,30 +648,39 @@
     // 3. Busca dados do perfil alvo para ajustar a interface
     database.ref(`usuarios/${uidDestino}/perfil`).once('value').then(snap => {
         const perfilAlvo = snap.val();
-        if(!perfilAlvo) return;
+        if (!perfilAlvo) return;
 
         // Atualiza o cabeçalho com o username do dono do mapa
         const infoHeader = document.getElementById('info');
-        if(infoHeader) infoHeader.innerText = `@${perfilAlvo.username.toUpperCase()}`;
+        if (infoHeader) infoHeader.innerText = `@${perfilAlvo.username.toUpperCase()}`;
 
         // 4. Inicia a escuta em tempo real das viagens deste perfil
-    database.ref(`usuarios/${uidDestino}/viagens`).on('value', (snapshot) => {
-    dbGlobal = snapshot.val() || {};
-    
-    // Atualiza o mapa e as abas de dados
-    atualizarInterface(); 
-    
-    // Se estou vendo MEU perfil, rodo lógicas de dono
-    if (uidDestino === usuarioLogado.uid) {
-        verificarNovasConquistas();
-        renderTimeline();
-        renderGastos();
-        renderJornada();
-    } else {
-        // Se estou vendo um AMIGO, apenas renderizo a timeline dele
-        renderTimeline(); 
-    }
-});
+        database.ref(`usuarios/${uidDestino}/viagens`).on('value', (snapshot) => {
+            dbGlobal = snapshot.val() || {};
+            
+            // Atualiza o mapa e as abas de dados
+            atualizarInterface(); 
+            
+            // Se estou vendo MEU perfil, rodo lógicas de dono
+            if (uidDestino === usuarioLogado.uid) {
+                verificarNovasConquistas();
+                renderTimeline();
+                renderGastos();
+                renderJornada();
+            } else {
+                // Se estou vendo um AMIGO, apenas renderizo a timeline dele
+                renderTimeline(); 
+            }
+        });
+
+        // 5. Chamadas ÚNICAS de sistema (Rodam apenas uma vez ao logar)
+        if (uidDestino === usuarioLogado.uid && !window.escutasIniciadas) {
+            escutarNotificacoes();
+            carregarMinhaListaAmigos();
+            window.escutasIniciadas = true;
+        }
+    }); 
+} 
 
 // 5. Chamadas ÚNICAS (Rodam apenas uma vez ao logar, fora do listener de viagens)
 if (uidDestino === usuarioLogado.uid && !window.escutasIniciadas) {
