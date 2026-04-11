@@ -655,7 +655,7 @@
         if(infoHeader) infoHeader.innerText = `@${perfilAlvo.username.toUpperCase()}`;
 
         // 4. Inicia a escuta em tempo real das viagens deste perfil
-database.ref(`usuarios/${uidDestino}/viagens`).on('value', (snapshot) => {
+    database.ref(`usuarios/${uidDestino}/viagens`).on('value', (snapshot) => {
     dbGlobal = snapshot.val() || {};
     
     // Atualiza o mapa e as abas de dados
