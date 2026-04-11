@@ -91,7 +91,16 @@
 
     <div id="popup-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;display:none;backdrop-filter:blur(4px);" onclick="fecharPopup()"></div>
 
-    <div id="aba-busca" class="aba">
+    <div id="aba-explorar" class="aba">
+    <div class="card" style="background: var(--primary); color: white; border-radius: 0 0 25px 25px; margin-top: -20px; padding: 30px 20px;">
+        <h2 style="margin:0;">Explorar Mundo 🌎</h2>
+        <p style="font-size: 12px; opacity: 0.8;">Descubra as rotas de outros viajantes</p>
+    </div>
+    <div id="feed-global-list" style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
+        </div>
+</div>
+
+<div id="aba-busca" class="aba">
     <div class="card">
         <h3 style="color: var(--primary); margin-bottom: 15px;">🔍 Encontrar Viajantes</h3>
         <div style="position: relative;">
@@ -99,8 +108,12 @@
                    oninput="buscarUsuarios(this.value)" 
                    style="padding-right: 40px;">
         </div>
+        <div id="lista-busca" style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
+            </div>
+    </div>
+</div>
 
-        <div id="aba-notificacoes" class="aba">
+<div id="aba-notificacoes" class="aba">
     <div class="card">
         <h3 style="color: var(--primary); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
             🔔 Notificações <span id="badget-notif" style="display:none; background:red; color:white; font-size:10px; padding:2px 6px; border-radius:10px;">0</span>
@@ -108,16 +121,14 @@
 
         <div id="secao-pedidos" style="margin-bottom: 25px;">
             <p style="font-size: 12px; font-weight: 800; color: var(--text-sub); text-transform: uppercase;">Pedidos de Amizade</p>
-            <div id="lista-pedidos" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                </div>
+            <div id="lista-pedidos" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;"></div>
         </div>
 
         <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
 
         <div id="secao-atividades">
             <p style="font-size: 12px; font-weight: 800; color: var(--text-sub); text-transform: uppercase;">Atividade</p>
-            <div id="lista-atividades" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                </div>
+            <div id="lista-atividades" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;"></div>
         </div>
     </div>
 </div>
@@ -285,12 +296,14 @@
     </div>
 
     <nav class="menu-nav">
-        <button class="btn-aba active" onclick="trocarAba('mapa', this)">🗺️</button>
-        <button class="btn-aba" onclick="trocarAba('timeline', this)">🕒</button>
-        <button class="btn-aba" onclick="trocarAba('jornada', this)">🏆</button>
-        <button class="btn-aba" onclick="trocarAba('registro', this)">➕</button>
-        <button class="btn-aba" onclick="trocarAba('gastos', this)">💰</button>
-    </nav>
+    <button class="btn-aba" onclick="abrirFeed(this)">🌍</button>
+    <button class="btn-aba active" onclick="trocarAba('mapa', this)">🗺️</button>
+    <button class="btn-aba" onclick="trocarAba('timeline', this)">🕒</button>
+    <button class="btn-aba" onclick="trocarAba('busca', this)">🔍</button>
+    <button class="btn-aba" onclick="trocarAba('registro', this)">➕</button>
+    <button class="btn-aba" onclick="trocarAba('notificacoes', this)">🔔</button>
+    <button class="btn-aba" onclick="trocarAba('gastos', this)">💰</button>
+</nav>
     
     <script>
     // 1. CONFIGURAÇÃO FIREBASE
@@ -543,6 +556,10 @@
     /**
  * Busca usuários no Firebase e renderiza a lista de resultados.
  */
+    function abrirFeed(elemento) {
+    trocarAba('explorar', elemento);
+    renderFeedGlobal();} // Aquela função que criamos para buscar as fotos de todos
+
     function buscarUsuarios(termo) {
     const lista = document.getElementById('lista-busca');
     termo = termo.toLowerCase().trim();
@@ -1286,19 +1303,43 @@ function renderTimeline() {
     });
 }
         
-    function removerViagem(uf, idFirebase, cidade) {
-        const modal = document.getElementById('custom-confirm');
-        const btnSim = document.getElementById('btn-confirmar');
-        const btnNao = document.getElementById('btn-cancelar');
-        document.getElementById('confirm-msg').innerText = `Deseja apagar a memória de ${cidade}?`;
-        modal.style.display = 'flex';
-        btnNao.onclick = () => { modal.style.display = 'none'; };
-        btnSim.onclick = () => {
-            database.ref('viagens/' + uf + '/' + idFirebase).remove();
-            modal.style.display = 'none';
-            mostrarAlerta("Memória apagada!", "🗑️");
-        };
+    /**
+ * Remove uma viagem do perfil do usuário e do Feed Global simultaneamente.
+ */
+async function removerViagem(uf, idFirebase, cidade) {
+    // Confirmação para evitar exclusões acidentais
+    if (!confirm(`Deseja realmente apagar sua memória em ${cidade}?`)) return;
+
+    try {
+        // 1. Localiza a referência no Feed Global para apagar também
+        // Buscamos no feed o post que tem o ID da nossa viagem original
+        const snapshotFeed = await database.ref('feed_global')
+            .orderByChild('idViagemOriginal')
+            .equalTo(idFirebase)
+            .once('value');
+
+        if (snapshotFeed.exists()) {
+            const idNoFeed = Object.keys(snapshotFeed.val())[0];
+            await database.ref(`feed_global/${idNoFeed}`).remove();
+            console.log("Removido do Feed Global");
+        }
+
+        // 2. Remove do Perfil Pessoal do Usuário
+        await database.ref(`usuarios/${usuarioLogado.uid}/viagens/${uf}/${idFirebase}`).remove();
+        
+        mostrarAlerta("Memória removida.", "🗑️");
+
+        // 3. Atualiza a interface (as funções .on do Firebase cuidarão do resto)
+        // Se houver algum pop-up aberto, fechamos
+        const popup = document.getElementById('photo-popup');
+        if (popup) popup.classList.remove('show');
+        document.getElementById('popup-overlay').style.display = 'none';
+
+    } catch (error) {
+        console.error("Erro ao remover:", error);
+        mostrarAlerta("Não foi possível remover a viagem.", "❌");
     }
+}
 
     function msgRegiao(r, ok) { 
         if(ok) return; 
