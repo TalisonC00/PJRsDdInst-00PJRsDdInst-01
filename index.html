@@ -682,14 +682,98 @@
     }); 
 } 
 
-// 5. Chamadas ÚNICAS (Rodam apenas uma vez ao logar, fora do listener de viagens)
-if (uidDestino === usuarioLogado.uid && !window.escutasIniciadas) {
-    escutarNotificacoes();
-    carregarMinhaListaAmigos();
-    window.escutasIniciadas = true; // Trava para não rodar duas vezes
+    /**
+ * Registra uma reação (curtida) em uma viagem específica.
+ * @param {string} idEstado - Ex: BRSP
+ * @param {string} idViagem - O ID único da viagem no Firebase
+ * @param {string} emoji - ❤️, 🔥 ou ✈️
+ */
+function reagirViagem(idEstado, idViagem, emoji) {
+    const donoPostUID = uidSendoVisualizado;
+    const minhaID = usuarioLogado.uid;
+    const refReacao = database.ref(`usuarios/${donoPostUID}/viagens/${idEstado}/${idViagem}/reacoes/${minhaID}`);
+
+    refReacao.once('value').then(snap => {
+        // Se eu já reagi com esse mesmo emoji, eu removo (toggle)
+        if (snap.exists() && snap.val().emoji === emoji) {
+            refReacao.remove();
+        } else {
+            // Salva a reação
+            refReacao.set({
+                emoji: emoji,
+                username: usuarioLogado.username,
+                timestamp: Date.now()
+            });
+
+            // Envia notificação para o dono (se não for eu mesmo)
+            if (donoPostUID !== minhaID) {
+                database.ref(`notificacoes/${donoPostUID}`).push({
+                    tipo: 'curtida',
+                    from: minhaID,
+                    msg: `@${usuarioLogado.username} reagiu com ${emoji} na sua viagem para ${idEstado.replace('BR','')}.`,
+                    timestamp: Date.now()
+                });
+            }
+        }
+    });
 }
+    function reagirViagem(idEstado, idViagem, emoji) {
+    const donoPostUID = uidSendoVisualizado;
+    const minhaID = usuarioLogado.uid;
+    const refReacao = database.ref(`usuarios/${donoPostUID}/viagens/${idEstado}/${idViagem}/reacoes/${minhaID}`);
+
+    refReacao.once('value').then(snap => {
+        if (snap.exists() && snap.val().emoji === emoji) {
+            refReacao.remove(); // Remove se clicar no mesmo
+        } else {
+            refReacao.set({
+                emoji: emoji,
+                username: usuarioLogado.username,
+                timestamp: Date.now()
+            });
+
+            if (donoPostUID !== minhaID) {
+                database.ref(`notificacoes/${donoPostUID}`).push({
+                    tipo: 'curtida',
+                    from: minhaID,
+                    msg: `@${usuarioLogado.username} reagiu com ${emoji} na sua viagem para ${idEstado.replace('BR','')}.`,
+                    timestamp: Date.now()
+                });
+            }
+        }
+    });
 }
+
+    function enviarComentario(idEstado, idViagem) {
+    const input = document.getElementById(`input-coment-${idViagem}`);
+    const texto = input.value.trim();
     
+    if (!texto) return;
+
+    const donoPostUID = uidSendoVisualizado;
+    const refComentarios = database.ref(`usuarios/${donoPostUID}/viagens/${idEstado}/${idViagem}/comentarios`);
+
+    refComentarios.push({
+        uid: usuarioLogado.uid,
+        username: usuarioLogado.username,
+        foto: usuarioLogado.fotoPerfil || '',
+        texto: texto,
+        timestamp: Date.now()
+    }).then(() => {
+        input.value = ''; // Limpa o campo
+        
+        // Notifica o dono do post
+        if (donoPostUID !== usuarioLogado.uid) {
+            database.ref(`notificacoes/${donoPostUID}`).push({
+                tipo: 'comentario',
+                from: usuarioLogado.uid,
+                msg: `@${usuarioLogado.username} comentou na sua viagem: "${texto.substring(0,20)}..."`,
+                timestamp: Date.now()
+            });
+        }
+    });
+}
+        
     function escutarNotificacoes() {
     // 1. Escutar Pedidos de Amizade
     database.ref(`pedidos_amizade/${usuarioLogado.uid}`).on('value', snapshot => {
@@ -923,10 +1007,16 @@ function verificarNovasConquistas() {
     }
 
     // 4. FUNÇÕES DE RENDERIZAÇÃO
-    function renderTimeline() {
+    /**
+ * Renderiza a Timeline Pessoal (Diário de Viagens).
+ * Foca na ordem cronológica, detalhes de gastos e gestão das memórias.
+ */
+function renderTimeline() {
     const lista = document.getElementById('timeline-list');
+    if (!lista) return;
     lista.innerHTML = '';
     
+    // 1. Coleta todas as viagens do dbGlobal (que já é filtrado pelo carregarPerfil)
     let todasViagens = [];
     Object.keys(dbGlobal).forEach(uf => {
         Object.keys(dbGlobal[uf]).forEach(id => {
@@ -934,12 +1024,15 @@ function verificarNovasConquistas() {
         });
     });
 
+    // 2. Ordenação Cronológica (Mais recente primeiro)
     todasViagens.sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
 
+    // 3. Construção dos itens da Timeline
     todasViagens.forEach(v => {
         let track = ''; 
         let bullets = '';
         
+        // Processamento do Carrossel de Fotos
         if(v.fotos && v.fotos.length > 0) {
             v.fotos.forEach((f, idx) => { 
                 track += `<img src="${f}" class="img-slide" style="width:100%; height:200px; object-fit:cover;">`; 
@@ -947,20 +1040,37 @@ function verificarNovasConquistas() {
             });
         }
 
+        // Processamento Social (Reações e Comentários)
+        const reacoes = v.reacoes || {};
+        const totalRed = Object.values(reacoes).filter(r => r.emoji === '❤️').length;
+        const totalFire = Object.values(reacoes).filter(r => r.emoji === '🔥').length;
+        const totalPlane = Object.values(reacoes).filter(r => r.emoji === '✈️').length;
+
+        let htmlComentarios = '';
+        const comentarios = v.comentarios || {};
+        Object.values(comentarios).forEach(c => {
+            htmlComentarios += `
+                <div style="font-size:11px; margin-top:4px; background:#f8fafc; padding:4px 8px; border-radius:8px;">
+                    <b style="color:var(--primary);">@${c.username}:</b> ${c.texto}
+                </div>`;
+        });
+
+        // 4. Criação do Elemento Visual (Seu estilo original)
         const item = document.createElement('div');
         item.className = 'timeline-item';
         item.innerHTML = `
             <div class="t-dot"></div>
-            <div class="t-card" style="padding: 12px;">
+            <div class="t-card" style="padding: 12px; margin-bottom: 25px; position: relative;">
+                
                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                     <div>
-                        <b style="color: var(--primary); font-size: 12px;">${v.uf.replace('BR','')}</b>
+                        <b style="color: var(--primary); font-size: 11px;">${v.uf.replace('BR','')}</b>
                         <h4 style="margin:0; font-size: 15px;">${v.cidade}</h4>
                     </div>
                     <span style="font-size: 10px; color: var(--text-sub);">${v.data}</span>
                 </div>
 
-                <div class="carousel-fotos" id="tl-car-${v.idFirebase}" style="height:200px; position:relative; border-radius: 15px;" 
+                <div class="carousel-fotos" id="tl-car-${v.idFirebase}" style="height:200px; position:relative; border-radius: 15px; overflow:hidden;" 
                      ontouchstart="hTS(event)" 
                      ontouchmove="hTM_TL(event, '${v.idFirebase}', ${v.fotos ? v.fotos.length : 0})">
                     <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
@@ -971,14 +1081,48 @@ function verificarNovasConquistas() {
                     </div>
                 </div>
 
-                <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 10px; background: #f1f5f9; padding: 4px 8px; border-radius: 8px;">R$ ${v.total.toLocaleString('pt-BR')}</span>
-                    <button onclick="removerViagem('${v.uf}', '${v.idFirebase}', '${v.cidade}')" style="background:none; border:none; font-size:14px; opacity:0.3;">🗑️</button>
+                <div style="display:flex; gap:12px; margin-top:12px; padding-bottom:8px; border-bottom:1px solid #f1f5f9;">
+                    <button onclick="reagirViagem('${v.uf}', '${v.idFirebase}', '❤️')" style="background:none; border:none; cursor:pointer; font-size:13px; display:flex; align-items:center; gap:3px;">
+                        ❤️ <span style="font-size:11px; font-weight:700; color:#64748b;">${totalRed}</span>
+                    </button>
+                    <button onclick="reagirViagem('${v.uf}', '${v.idFirebase}', '🔥')" style="background:none; border:none; cursor:pointer; font-size:13px; display:flex; align-items:center; gap:3px;">
+                        🔥 <span style="font-size:11px; font-weight:700; color:#64748b;">${totalFire}</span>
+                    </button>
+                    <button onclick="reagirViagem('${v.uf}', '${v.idFirebase}', '✈️')" style="background:none; border:none; cursor:pointer; font-size:13px; display:flex; align-items:center; gap:3px;">
+                        ✈️ <span style="font-size:11px; font-weight:700; color:#64748b;">${totalPlane}</span>
+                    </button>
+                </div>
+
+                <div style="margin-top:10px;">
+                    <div style="max-height:80px; overflow-y:auto; margin-bottom:8px;">
+                        ${htmlComentarios}
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <input type="text" id="input-coment-${v.idFirebase}" placeholder="Comentar..." 
+                               style="flex:1; font-size:11px; padding:6px 10px; border-radius:10px; border:1px solid #e2e8f0; background:#f8fafc;">
+                        <button onclick="enviarComentario('${v.uf}', '${v.idFirebase}')" 
+                                style="background:var(--primary); color:white; border:none; border-radius:10px; padding:0 10px; font-size:12px;">
+                            ✈️
+                        </button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top:8px;">
+                    <span style="font-size: 10px; font-weight:800; color: #4ade80;">R$ ${v.total.toLocaleString('pt-BR')}</span>
+                    
+                    ${uidSendoVisualizado === usuarioLogado.uid ? `
+                        <button onclick="removerViagem('${v.uf}', '${v.idFirebase}', '${v.cidade}')" 
+                                style="background:none; border:none; font-size:14px; opacity:0.3; cursor:pointer;">🗑️</button>
+                    ` : ''}
                 </div>
             </div>
         `;
         lista.appendChild(item);
     });
+
+    if (todasViagens.length === 0) {
+        lista.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-sub); font-size:12px;">Nenhuma memória registrada nesta jornada ainda.</p>';
+    }
 }
 
     function renderGastos() {
@@ -1029,20 +1173,119 @@ function verificarNovasConquistas() {
     }
 
     async function salvarViagem() {
-        const elUf = document.getElementById('sel-uf'), elCidade = document.getElementById('txt-cidade'), elData = document.getElementById('txt-data'), elHosp = document.getElementById('v-hosp'), elTrans = document.getElementById('v-trans'), elAlime = document.getElementById('v-alime'), elAtrac = document.getElementById('v-atrac'), elFoto = document.getElementById('inp-foto'), elPraia = document.getElementById('chk-praia');
-        if (!elCidade.value.trim()) return mostrarAlerta("Digite o nome da cidade.", "📍");
-        if (!elData.value) return mostrarAlerta("Data é obrigatória.", "📅");
-        const h = parseFloat(elHosp.value) || 0, t = parseFloat(elTrans.value) || 0, al = parseFloat(elAlime.value) || 0, at = parseFloat(elAtrac.value) || 0;
-        const files = elFoto.files; let fotos = []; 
-        for (let i = 0; i < Math.min(files.length, 3); i++) { fotos.push(await converter(files[i])); }
-        const trip = { cidade: elCidade.value, uf: elUf.value, data: elData.value.split('-').reverse().join('/'), rawDate: elData.value, fotos, h, t, al, at, praia: elPraia.checked, total: h + t + al + at };
-        database.ref('viagens/' + elUf.value).push(trip).then(() => {
-            elCidade.value = ""; elData.value = ""; elHosp.value = ""; elTrans.value = ""; elAlime.value = ""; elAtrac.value = ""; elFoto.value = ""; elPraia.checked = false;
-            mostrarAlerta("Memória salva!", "📌");
-            trocarAba('mapa', document.querySelector('.btn-aba'));
-        });
+    const elUf = document.getElementById('sel-uf'), 
+          elCidade = document.getElementById('txt-cidade'), 
+          elData = document.getElementById('txt-data'), 
+          elHosp = document.getElementById('v-hosp'), 
+          elTrans = document.getElementById('v-trans'), 
+          elAlime = document.getElementById('v-alime'), 
+          elAtrac = document.getElementById('v-atrac'), 
+          elFoto = document.getElementById('inp-foto'), 
+          elPraia = document.getElementById('chk-praia');
+
+    // Validações básicas
+    if (!elCidade.value.trim()) return mostrarAlerta("Digite o nome da cidade.", "📍");
+    if (!elData.value) return mostrarAlerta("Data é obrigatória.", "📅");
+    if (!usuarioLogado) return mostrarAlerta("Erro: Usuário não identificado.", "❌");
+
+    const h = parseFloat(elHosp.value) || 0, 
+          t = parseFloat(elTrans.value) || 0, 
+          al = parseFloat(elAlime.value) || 0, 
+          at = parseFloat(elAtrac.value) || 0;
+
+    // Processamento de fotos (limite de 3)
+    const files = elFoto.files; 
+    let fotos = []; 
+    for (let i = 0; i < Math.min(files.length, 3); i++) { 
+        fotos.push(await converter(files[i])); 
     }
 
+    // Estrutura da viagem para o Perfil Pessoal
+    const trip = { 
+        cidade: elCidade.value, 
+        uf: elUf.value, 
+        data: elData.value.split('-').reverse().join('/'), 
+        rawDate: elData.value, 
+        fotos, 
+        h, t, al, at, 
+        praia: elPraia.checked, 
+        total: h + t + al + at,
+        timestamp: Date.now()
+    };
+
+    // 1. SALVAR NO PERFIL PESSOAL (Caminho: usuarios/UID/viagens/UF)
+    const refPessoal = database.ref(`usuarios/${usuarioLogado.uid}/viagens/${elUf.value}`).push();
+    
+    refPessoal.set(trip).then(() => {
+        
+        // 2. SALVAR NO FEED GLOBAL (Caminho: feed_global)
+        // Guardamos as informações do autor e a marcação de privacidade
+        database.ref('feed_global').push({
+            ...trip,
+            autorUid: usuarioLogado.uid,
+            autorUsername: usuarioLogado.username,
+            autorFoto: usuarioLogado.fotoPerfil || '',
+            privado: (usuarioLogado.tipoPerfil === 'privado'),
+            idViagemOriginal: refPessoal.key // Referência para futuras edições/exclusões
+        });
+
+        // Limpeza dos campos
+        elCidade.value = ""; elData.value = ""; elHosp.value = ""; elTrans.value = ""; 
+        elAlime.value = ""; elAtrac.value = ""; elFoto.value = ""; elPraia.checked = false;
+
+        mostrarAlerta("Memória eternizada!", "✈️");
+        trocarAba('mapa', document.querySelector('.btn-aba'));
+    }).catch(error => {
+        console.error("Erro ao salvar:", error);
+        mostrarAlerta("Erro ao salvar viagem.", "❌");
+    });
+}
+
+    function renderFeedGlobal() {
+    const container = document.getElementById('feed-global-list');
+    if (!container) return;
+
+    database.ref('feed_global').orderByChild('timestamp').limitToLast(50).once('value', snapshot => {
+        let html = '';
+        const postagens = [];
+        snapshot.forEach(child => { postagens.push({ idFeed: child.key, ...child.val() }); });
+
+        postagens.reverse().forEach(p => {
+            // REGRA DE OURO DA PRIVACIDADE:
+            const souAmigo = listaMeusAmigos.includes(p.autorUid);
+            const souEu = p.autorUid === usuarioLogado.uid;
+            
+            // Se o post for privado e eu NÃO sou amigo (e não sou eu mesmo), eu pulo esse post
+            if (p.privado && !souAmigo && !souEu) {
+                return; // Pula para a próxima postagem sem adicionar ao HTML
+            }
+
+            // ... (Restante da lógica de Reações que já temos) ...
+            const reacoes = p.reacoes || {};
+            const totalRed = Object.values(reacoes).filter(r => r.emoji === '❤️').length;
+
+            html += `
+                <div class="card" style="margin-bottom:20px; padding:15px;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; cursor:pointer;" onclick="irParaPerfil('${p.autorUid}')">
+                        <img src="${p.autorFoto || 'default-avatar.png'}" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
+                        <div>
+                            <p style="margin:0; font-size:13px; font-weight:800;">@${p.autorUsername} ${p.privado ? '🔒' : ''}</p>
+                            <p style="margin:0; font-size:10px; color:var(--text-sub);">📍 ${p.cidade}</p>
+                        </div>
+                    </div>
+                    ${p.foto ? `<img src="${p.foto}" style="width:100%; height:220px; object-fit:cover; border-radius:16px;">` : ''}
+                    
+                    <div style="display:flex; gap:12px; margin-top:10px;">
+                        <button onclick="reagirFeed('${p.idFeed}', '❤️')" style="background:none; border:none;">❤️ ${totalRed}</button>
+                        </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html || '<p style="text-align:center;">Nada para explorar no momento.</p>';
+    });
+}
+        
     function removerViagem(uf, idFirebase, cidade) {
         const modal = document.getElementById('custom-confirm');
         const btnSim = document.getElementById('btn-confirmar');
