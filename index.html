@@ -732,34 +732,6 @@ function reagirViagem(idEstado, idViagem, emoji) {
                 });
             }
         }
-    });
-}
-    function reagirViagem(idEstado, idViagem, emoji) {
-    const donoPostUID = uidSendoVisualizado;
-    const minhaID = usuarioLogado.uid;
-    const refReacao = database.ref(`usuarios/${donoPostUID}/viagens/${idEstado}/${idViagem}/reacoes/${minhaID}`);
-
-    refReacao.once('value').then(snap => {
-        if (snap.exists() && snap.val().emoji === emoji) {
-            refReacao.remove(); // Remove se clicar no mesmo
-        } else {
-            refReacao.set({
-                emoji: emoji,
-                username: usuarioLogado.username,
-                timestamp: Date.now()
-            });
-
-            if (donoPostUID !== minhaID) {
-                database.ref(`notificacoes/${donoPostUID}`).push({
-                    tipo: 'curtida',
-                    from: minhaID,
-                    msg: `@${usuarioLogado.username} reagiu com ${emoji} na sua viagem para ${idEstado.replace('BR','')}.`,
-                    timestamp: Date.now()
-                });
-            }
-        }
-    });
-}
 
     function enviarComentario(idEstado, idViagem) {
     const input = document.getElementById(`input-coment-${idViagem}`);
