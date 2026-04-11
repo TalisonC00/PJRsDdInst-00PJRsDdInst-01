@@ -292,6 +292,7 @@
     let timeoutUsername;
     let modoCadastro = false;
     let uidSendoVisualizado = null;
+    let listaMeusAmigos = [];
         
     const REGIOES = {
         'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
@@ -465,7 +466,7 @@
     }, 500); // Espera 0.5s após parar de digitar
 }
 
-async function finalizarCadastro() {
+    async function finalizarCadastro() {
     if (!usernameDisponivel) return;
 
     const nome = document.getElementById('cad-nome').value;
@@ -504,6 +505,47 @@ async function finalizarCadastro() {
         
         
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
+    function carregarPerfil(uidDestino) {
+    // 1. Limpeza de Segurança: Desliga ouvintes do perfil anterior
+    if (uidSendoVisualizado) {
+        database.ref(`usuarios/${uidSendoVisualizado}/viagens`).off();
+        database.ref(`usuarios/${uidSendoVisualizado}/conquistas_vistas`).off();
+    }
+
+    // 2. Define o novo alvo e limpa o mapa visualmente
+    uidSendoVisualizado = uidDestino;
+    document.querySelectorAll('#mapa-svg-real path').forEach(p => p.classList.remove('visitado'));
+
+    // 3. Busca dados do perfil alvo para ajustar a interface
+    database.ref(`usuarios/${uidDestino}/perfil`).once('value').then(snap => {
+        const perfilAlvo = snap.val();
+        if(!perfilAlvo) return;
+
+        // Atualiza o cabeçalho com o username do dono do mapa
+        const infoHeader = document.getElementById('info');
+        if(infoHeader) infoHeader.innerText = `@${perfilAlvo.username.toUpperCase()}`;
+
+        // 4. Inicia a escuta em tempo real das viagens deste perfil
+        database.ref(`usuarios/${uidDestino}/viagens`).on('value', (snapshot) => {
+            dbGlobal = snapshot.val() || {};
+            
+            // Pinta os estados no mapa e atualiza as abas
+            atualizarInterface(); 
+            
+            // Se estou no meu perfil, rodo tudo. Se for de outro, apenas o básico.
+            if (uidDestino === usuarioLogado.uid) {
+                verificarNovasConquistas();
+                renderTimeline();
+                renderGastos();
+                renderJornada();
+            } else {
+                // Aqui você pode decidir se quer renderizar a timeline do amigo ou não
+                renderTimeline(); 
+            }
+        });
+    });
+}
+    
     function mostrarAlerta(msg, icon = '💡') {
         document.getElementById('alert-msg').innerText = msg;
         document.getElementById('alert-icon').innerText = icon;
@@ -787,24 +829,92 @@ function verificarNovasConquistas() {
         if (controleMapa) { controleMapa.resetZoom(); controleMapa.center(); controleMapa.fit(); }
     }
 
-    function abrirHistorico(id) {
-        const listaObj = dbGlobal[id]; if (!listaObj) return;
-        let h = `<h2 style="color:var(--primary); margin:0 0 15px 10px; font-size:20px; font-weight:800;">🚩 ${id.replace('BR','')}</h2>`;
+    function abrirHistorico(idEstado) {
+    // 1. Identifica se o usuário está vendo o próprio mapa
+    const souEu = (uidSendoVisualizado === usuarioLogado.uid);
+
+    // 2. Busca o perfil do dono do mapa para checar privacidade
+    database.ref(`usuarios/${uidSendoVisualizado}/perfil`).once('value').then(snap => {
+        const perfil = snap.val();
+        if (!perfil) return;
+
+        // 3. REGRA DE PRIVACIDADE:
+        // Se não sou eu, e o perfil é "privado", verificamos se somos amigos
+        if (!souEu && perfil.tipoPerfil === 'privado') {
+            // listaMeusAmigos deve ser carregada no login (verificaremos isso na aba de busca)
+            const somosAmigos = (typeof listaMeusAmigos !== 'undefined' && listaMeusAmigos.includes(uidSendoVisualizado));
+            
+            if (!somosAmigos) {
+                mostrarAlerta("Este é um Viajante Local. Envie um convite para ver as memórias!", "🔒");
+                return; // Bloqueia a execução e não abre o pop-up
+            }
+        }
+
+        // 4. BUSCA OS DADOS DA VIAGEM (dbGlobal já está sincronizado pela função carregarPerfil)
+        const listaObj = dbGlobal[idEstado]; 
+        if (!listaObj) {
+            // Se não houver viagem e for o meu perfil, posso sugerir adicionar
+            if(souEu) mostrarAlerta("Nenhuma memória aqui ainda. Que tal registrar uma? 📸", "📍");
+            return;
+        }
+
+        // 5. MONTAGEM DO HTML DO POP-UP
+        let h = `<h2 style="color:var(--primary); margin:0 0 15px 10px; font-size:20px; font-weight:800;">🚩 ${idEstado.replace('BR','')}</h2>`;
+        
+        // Percorre todas as viagens registradas naquele estado
         Object.keys(listaObj).forEach((idFirebase) => {
             const v = listaObj[idFirebase];
-            let track = ''; let bullets = '';
-            if(v.fotos) {
+            let track = ''; 
+            let bullets = '';
+            
+            // Gerar Carrossel de Fotos se existirem
+            if(v.fotos && v.fotos.length > 0) {
                 v.fotos.forEach((f, idx) => { 
                     track += `<img src="${f}" class="img-slide" style="width:100%; height:300px; object-fit:cover;">`; 
                     bullets += `<div class="bullet-${idFirebase}" style="width:6px; height:6px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`;
                 });
+            } else {
+                track = `<div style="width:100%; height:300px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; color:#cbd5e1;">Sem fotos</div>`;
             }
-            h += `<div style="margin-bottom:20px; border-radius:24px; overflow:hidden; position:relative; background:#f1f5f9; box-shadow:0 10px 20px rgba(0,0,0,0.05);"><div class="carousel-fotos" id="car-${idFirebase}" style="height:300px; position:relative;" ontouchstart="hTS(event)" ontouchmove="hTM(event, '${idFirebase}', ${v.fotos ? v.fotos.length : 0})"><div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">${track || '<div style="width:100%; height:300px; background:#eee;"></div>'}</div><div style="position:absolute; bottom:0; left:0; width:100%; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding:15px; box-sizing:border-box; pointer-events:none;"><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><p style="margin:0; font-size:15px; font-weight:700; color:white;">${v.cidade}</p><span style="font-size:10px; color:rgba(255,255,255,0.7); font-weight:600;">${v.data}</span></div><span style="color:#4ade80; font-weight:800; font-size:13px; background:rgba(0,0,0,0.3); padding:4px 8px; border-radius:8px;">${v.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div><div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">${bullets}</div></div></div></div>`;
+
+            // Template do Card de Viagem dentro do Pop-up
+            h += `
+                <div style="margin-bottom:20px; border-radius:24px; overflow:hidden; position:relative; background:#f1f5f9; box-shadow:0 10px 20px rgba(0,0,0,0.05);">
+                    <div class="carousel-fotos" id="car-${idFirebase}" style="height:300px; position:relative;" ontouchstart="hTS(event)" ontouchmove="hTM(event, '${idFirebase}', ${v.fotos ? v.fotos.length : 0})">
+                        <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
+                            ${track}
+                        </div>
+                        
+                        <div style="position:absolute; bottom:0; left:0; width:100%; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding:15px; box-sizing:border-box; pointer-events:none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                                <div>
+                                    <p style="margin:0; font-size:15px; font-weight:700; color:white;">${v.cidade}</p>
+                                    <span style="font-size:10px; color:rgba(255,255,255,0.7); font-weight:600;">${v.data}</span>
+                                </div>
+                                <span style="color:#4ade80; font-weight:800; font-size:13px; background:rgba(0,0,0,0.3); padding:4px 8px; border-radius:8px;">
+                                    ${v.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                            </div>
+                            <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
+                                ${bullets}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${souEu ? `
+                    <button onclick="removerViagem('${idEstado}', '${idFirebase}', '${v.cidade}')" 
+                            style="position:absolute; top:10px; right:10px; background:rgba(255,255,255,0.2); border:none; color:white; width:30px; height:30px; border-radius:50%; font-size:12px; backdrop-filter:blur(5px); cursor:pointer;">
+                        🗑️
+                    </button>` : ''}
+                </div>`;
         });
+
+        // 6. EXIBIÇÃO FINAL
         document.getElementById('popup-content').innerHTML = h;
         document.getElementById('photo-popup').classList.add('show');
         document.getElementById('popup-overlay').style.display = 'block';
-    }
+    });
+}
 
     let sX = 0; function hTS(e) { sX = e.touches[0].clientX; }
     function hTM(e, idF, len) { 
@@ -851,27 +961,57 @@ function verificarNovasConquistas() {
     }
 
     async function init() {
-    const res = await fetch('br.svg');
-    const svg = await res.text();
-    document.getElementById('svg-container').innerHTML = svg;
-    const svgEl = document.querySelector('#svg-container svg');
-    svgEl.id = "mapa-svg-real"; svgEl.style.width = "100%"; svgEl.style.height = "100%";
-    
-    controleMapa = svgPanZoom('#mapa-svg-real', { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, zoomScaleSensitivity: 0.3, minZoom: 0.5, maxZoom: 10 });
+    // SEGURANÇA: Só inicia se o perfil social estiver carregado
+    if (!usuarioLogado || !usuarioLogado.uid) {
+        trocarAba('login', null);
+        return;
+    }
 
-    document.getElementById('svg-container').addEventListener('touchend', (e) => {
-        const target = e.target.closest('path');
-        if (target && target.id) abrirHistorico(target.id);
-    });
+    try {
+        // CARREGAMENTO DO MAPA (SVG)
+        const res = await fetch('br.svg');
+        const svg = await res.text();
+        const container = document.getElementById('svg-container');
+        container.innerHTML = svg;
+        
+        const svgEl = container.querySelector('svg');
+        svgEl.id = "mapa-svg-real"; 
+        svgEl.style.width = "100%"; 
+        svgEl.style.height = "100%";
 
-    // SINCRONIZAÇÃO: Busca no Firebase e salva no LocalStorage do celular
-    database.ref('conquistas_vistas').on('value', (snapshot) => {
-        const dados = snapshot.val() || {};
-        conquistasDesbloqueadas = dados;
-        const idsVistos = Object.keys(dados);
-        localStorage.setItem('conquistas_vistas', JSON.stringify(idsVistos));
-    });
+        // Inicializa o controle de Zoom e Pan
+        controleMapa = svgPanZoom('#mapa-svg-real', { 
+            zoomEnabled: true, 
+            controlIconsEnabled: false, 
+            fit: true, 
+            center: true, 
+            zoomScaleSensitivity: 0.3, 
+            minZoom: 0.5, 
+            maxZoom: 10 
+        });
 
+        // Evento de toque no mapa (Com trava para não disparar ao arrastar)
+        let isDragging = false;
+        container.addEventListener('touchstart', () => isDragging = false);
+        container.addEventListener('touchmove', () => isDragging = true);
+        container.addEventListener('touchend', (e) => {
+            if (isDragging) return;
+            const target = e.target.closest('path');
+            if (target && target.id) abrirHistorico(target.id);
+        });
+
+        // Após carregar o mapa, carregamos o perfil do próprio usuário
+        carregarPerfil(usuarioLogado.uid);
+
+        // Interface: Mostra o menu e limpa as telas de entrada
+        document.getElementById('menu-inferior').style.display = 'flex';
+        document.getElementById('aba-login').style.display = 'none';
+        document.getElementById('aba-cadastro').style.display = 'none';
+
+    } catch (err) {
+        console.error("Erro ao inicializar mapa:", err);
+    }
+}
     // ESCUTA AS VIAGENS
     database.ref('viagens').on('value', (snapshot) => {
         dbGlobal = snapshot.val() || {};
