@@ -655,25 +655,32 @@
         if(infoHeader) infoHeader.innerText = `@${perfilAlvo.username.toUpperCase()}`;
 
         // 4. Inicia a escuta em tempo real das viagens deste perfil
-        database.ref(`usuarios/${uidDestino}/viagens`).on('value', (snapshot) => {
-            dbGlobal = snapshot.val() || {};
-            
-            // Pinta os estados no mapa e atualiza as abas
-            atualizarInterface(); 
-            
-            // Se estou no meu perfil, rodo tudo. Se for de outro, apenas o básico.
-            if (uidDestino === usuarioLogado.uid) {
-                verificarNovasConquistas();
-                renderTimeline();
-                renderGastos();
-                renderJornada();
-            } else {
-                // Aqui você pode decidir se quer renderizar a timeline do amigo ou não
-                renderTimeline(); 
-            }
-        });
-    });
+database.ref(`usuarios/${uidDestino}/viagens`).on('value', (snapshot) => {
+    dbGlobal = snapshot.val() || {};
+    
+    // Atualiza o mapa e as abas de dados
+    atualizarInterface(); 
+    
+    // Se estou vendo MEU perfil, rodo lógicas de dono
+    if (uidDestino === usuarioLogado.uid) {
+        verificarNovasConquistas();
+        renderTimeline();
+        renderGastos();
+        renderJornada();
+    } else {
+        // Se estou vendo um AMIGO, apenas renderizo a timeline dele
+        renderTimeline(); 
+    }
+});
+
+// 5. Chamadas ÚNICAS (Rodam apenas uma vez ao logar, fora do listener de viagens)
+if (uidDestino === usuarioLogado.uid && !window.escutasIniciadas) {
+    escutarNotificacoes();
+    carregarMinhaListaAmigos();
+    window.escutasIniciadas = true; // Trava para não rodar duas vezes
 }
+}
+    
     function escutarNotificacoes() {
     // 1. Escutar Pedidos de Amizade
     database.ref(`pedidos_amizade/${usuarioLogado.uid}`).on('value', snapshot => {
