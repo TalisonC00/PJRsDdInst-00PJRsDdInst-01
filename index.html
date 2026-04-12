@@ -849,15 +849,34 @@ function verificarNovasConquistas() {
     document.getElementById('info').innerText = `ESTADOS CONQUISTADOS: ${Object.keys(dbGlobal).length}`; 
     }
 
-    function initApp(perfil) {
-    dadosUsuario = perfil;
-    perfilEmFoco = perfil; // O app começa focando no próprio usuário
+    // --- COLOQUE ESTAS FUNÇÕES DENTRO DO SEU SCRIPT ---
+
+function toggleAuthMode() {
+    modoRegistro = !modoRegistro;
+    const btn = document.getElementById('btn-auth-principal');
+    const text = document.getElementById('toggle-text');
+    const campos = document.getElementById('campos-registro');
     
-    // Atualiza o badge no header
+    if (modoRegistro) {
+        btn.innerText = "Criar Conta";
+        text.innerText = "Já tem conta? Entre aqui";
+        campos.style.display = "block";
+    } else {
+        btn.innerText = "Entrar";
+        text.innerText = "Não tem conta? Cadastre-se";
+        campos.style.display = "none";
+    }
+}
+
+// Inicialização correta do App
+function initApp(perfil) {
+    dadosUsuario = perfil;
+    perfilEmFoco = perfil;
+    
     const userBadge = document.getElementById('user-badge');
     if(userBadge) userBadge.innerText = `@${perfil.username}`;
 
-    // Configura a escuta de dados focada no UID do usuário
+    // Escuta específica das viagens do usuário logado
     database.ref(`users/${userLogado.uid}/viagens`).on('value', (snapshot) => {
         dbGlobal = snapshot.val() || {};
         atualizarInterface();
@@ -867,10 +886,10 @@ function verificarNovasConquistas() {
         renderJornada();
     });
 
-    init(); // Inicializa o mapa SVG
+    init(); // Carrega o SVG do mapa
 }
 
-// Observador de Autenticação atualizado
+// Observador de Autenticação (Ajustado)
 firebase.auth().onAuthStateChanged(async (user) => {
     if (user) {
         userLogado = user;
@@ -882,14 +901,33 @@ firebase.auth().onAuthStateChanged(async (user) => {
             document.getElementById('card-finalizar').style.display = 'block';
         } else {
             document.getElementById('auth-container').style.display = 'none';
-            initApp(perfil); // Chama a função que inicia os dados
+            initApp(perfil);
         }
     } else {
         document.getElementById('auth-container').style.display = 'flex';
+        // Garante que o card de auth apareça se o user deslogar
+        document.getElementById('card-auth').style.display = 'block';
+        document.getElementById('card-finalizar').style.display = 'none';
     }
 });
-}
 
+// A função init() deve ser chamada apenas dentro do initApp ou após o login
+async function init() {
+    const res = await fetch('br.svg');
+    const svg = await res.text();
+    document.getElementById('svg-container').innerHTML = svg;
+    const svgEl = document.querySelector('#svg-container svg');
+    if(svgEl) {
+        svgEl.id = "mapa-svg-real"; svgEl.style.width = "100%"; svgEl.style.height = "100%";
+        controleMapa = svgPanZoom('#mapa-svg-real', { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, zoomScaleSensitivity: 0.3, minZoom: 0.5, maxZoom: 10 });
+
+        document.getElementById('svg-container').addEventListener('touchend', (e) => {
+            const target = e.target.closest('path');
+            if (target && target.id) abrirHistorico(target.id);
+        });
+    }
+}
+        
 </script>
 </body>
 </html>
