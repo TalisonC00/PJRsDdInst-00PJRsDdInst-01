@@ -1462,70 +1462,41 @@ async function removerViagem(uf, idFirebase, cidade) {
     }
 
     async function init() {
-    // SEGURANÇA: Só inicia se o perfil social estiver carregado
-    if (!usuarioLogado || !usuarioLogado.uid) {
-        trocarAba('login', null);
-        return;
+        if (!usuarioLogado) return;
+
+        try {
+            const res = await fetch('br.svg');
+            const svg = await res.text();
+            const container = document.getElementById('svg-container');
+            container.innerHTML = svg;
+            
+            const svgEl = container.querySelector('svg');
+            svgEl.id = "mapa-svg-real"; 
+            svgEl.style.width = "100%"; 
+            svgEl.style.height = "100%";
+
+            controleMapa = svgPanZoom('#mapa-svg-real', { 
+                zoomEnabled: true, 
+                controlIconsEnabled: false, 
+                fit: true, 
+                center: true 
+            });
+
+            container.addEventListener('touchend', (e) => {
+                const target = e.target.closest('path');
+                if (target && target.id) abrirHistorico(target.id);
+            });
+
+            carregarPerfil(usuarioLogado.uid);
+
+            document.querySelector('.menu-nav').style.display = 'flex';
+            document.getElementById('aba-login').style.display = 'none';
+            document.getElementById('aba-cadastro').style.display = 'none';
+
+        } catch (err) {
+            console.error("Erro ao inicializar:", err);
+        }
     }
-
-    try {
-        // CARREGAMENTO DO MAPA (SVG)
-        const res = await fetch('br.svg');
-        const svg = await res.text();
-        const container = document.getElementById('svg-container');
-        container.innerHTML = svg;
-        
-        const svgEl = container.querySelector('svg');
-        svgEl.id = "mapa-svg-real"; 
-        svgEl.style.width = "100%"; 
-        svgEl.style.height = "100%";
-
-        // Inicializa o controle de Zoom e Pan
-        controleMapa = svgPanZoom('#mapa-svg-real', { 
-            zoomEnabled: true, 
-            controlIconsEnabled: false, 
-            fit: true, 
-            center: true, 
-            zoomScaleSensitivity: 0.3, 
-            minZoom: 0.5, 
-            maxZoom: 10 
-        });
-
-        // Evento de toque no mapa (Com trava para não disparar ao arrastar)
-        let isDragging = false;
-        container.addEventListener('touchstart', () => isDragging = false);
-        container.addEventListener('touchmove', () => isDragging = true);
-        container.addEventListener('touchend', (e) => {
-            if (isDragging) return;
-            const target = e.target.closest('path');
-            if (target && target.id) abrirHistorico(target.id);
-        });
-
-        // Após carregar o mapa, carregamos o perfil do próprio usuário
-        carregarPerfil(usuarioLogado.uid);
-
-        // Interface: Mostra o menu e limpa as telas de entrada
-        document.getElementById('menu-inferior').style.display = 'flex';
-        document.getElementById('aba-login').style.display = 'none';
-        document.getElementById('aba-cadastro').style.display = 'none';
-
-    } catch (err) {
-        console.error("Erro ao inicializar mapa:", err);
-    }
-}
-    // ESCUTA AS VIAGENS
-    database.ref('viagens').on('value', (snapshot) => {
-        dbGlobal = snapshot.val() || {};
-        atualizarInterface();
-        verificarNovasConquistas(); 
-        renderTimeline();
-        renderGastos();
-        renderJornada();
-        escutarNotificacoes();
-        carregarMinhaListaAmigos();
-    });
-}      
-    init();
 </script>
 </body>
 </html>
