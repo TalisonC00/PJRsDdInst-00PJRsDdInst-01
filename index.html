@@ -322,16 +322,19 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     firebase.auth().onAuthStateChanged((user) => {
+    const menu = document.querySelector('.menu-nav');
+    const header = document.querySelector('.header');
+
     if (user) {
-        // O usuário está autenticado no Firebase Auth
         console.log("Usuário autenticado:", user.uid);
+        if (menu) menu.style.display = 'flex';
+        if (header) header.style.display = 'block';
         verificarPerfilExistente(user.uid);
     } else {
-        // Ninguém logado: Força a tela de login
         console.log("Nenhum usuário logado.");
+        if (menu) menu.style.display = 'none';
+        if (header) header.style.display = 'none';
         trocarAba('login', null);
-        // Esconde o menu de navegação para não logados
-        document.getElementById('menu-nav').style.display = 'none';
     }
 });
 
