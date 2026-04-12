@@ -1,3 +1,856 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ondeé 🌍</title>
 
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icone.jpeg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Nossa Jornada">
+
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        :root { --primary: #FF4B5C; --sky: #BAE6FD; --card: #FFFFFF; --text-main: #1E293B; --text-sub: #64748B; --money: #10B981; }
+        
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--sky); margin: 0; padding: 0; overflow: hidden; touch-action: manipulation; color: var(--text-main); }
+        .header { background: #fff; padding: 15px 16px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.03); position: relative; z-index: 100; }
+        .header h3 { margin: 0; font-size: 18px; color: var(--primary) !important; font-weight: 800; }
+        #info { font-size: 10px; font-weight: 800; color: #000; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; display: block; }
+
+        .aba { display: none; width: 100%; height: calc(100vh - 155px); overflow-y: auto; padding-bottom: 50px; -webkit-overflow-scrolling: touch; }
+        .ativa { display: block; }
+        .card { background: var(--card); padding: 20px; margin: 16px; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
+
+        /* MAPA */
+        .mapa-card { background: var(--card); margin: 16px; border-radius: 28px; height: calc(100% - 32px); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+        #svg-container { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #fff; touch-action: auto !important; }
+        path { fill: #F1F5F9; stroke: #fff; stroke-width: 0.8; transition: 0.5s; cursor: pointer; }
+        
+        /* Cores Regiões */
+        .visitado[id^="BRAC"], .visitado[id^="BRAM"], .visitado[id^="BRRR"], .visitado[id^="BRRO"], .visitado[id^="BRPA"], .visitado[id^="BRAP"], .visitado[id^="BRTO"] { fill: #22C55E !important; }
+        .visitado[id^="BRMA"], .visitado[id^="BRPI"], .visitado[id^="BRCE"], .visitado[id^="BRRN"], .visitado[id^="BRPB"], .visitado[id^="BRPE"], .visitado[id^="BRAL"], .visitado[id^="BRSE"], .visitado[id^="BRBA"] { fill: #FACC15 !important; }
+        .visitado[id^="BRMT"], .visitado[id^="BRMS"], .visitado[id^="BRGO"], .visitado[id^="BRDF"] { fill: #FB923C !important; }
+        .visitado[id^="BRMG"], .visitado[id^="BRSP"], .visitado[id^="BRRJ"], .visitado[id^="BRES"] { fill: #EC4899 !important; }
+        .visitado[id^="BRPR"], .visitado[id^="BRSC"], .visitado[id^="BRRS"] { fill: #A855F7 !important; }
+
+        /* TIMELINE */
+        .timeline-container { padding: 10px 5px; position: relative; }
+        .timeline-line { position: absolute; left: 33px; top: 60px; bottom: 20px; width: 3px; background: rgba(255,255,255,0.8); z-index: 0; border-radius: 10px; }
+        .timeline-item { display: flex; gap: 15px; margin-bottom: 25px; position: relative; z-index: 2; margin-left: 20px; margin-right: 16px; }
+        .t-dot { min-width: 14px; height: 14px; background: var(--primary); border: 3px solid #fff; border-radius: 50%; margin-top: 6px; z-index: 3; box-shadow: 0 0 0 2px rgba(255,75,92,0.1); }
+        .t-card { background: #fff; padding: 18px; border-radius: 24px; flex: 1; box-shadow: 0 8px 25px rgba(0,0,0,0.04); border: 1px solid #f8fafc; }
+
+        /* GASTOS */
+        .resumo-uf-card { background: #fff; border-radius: 24px; padding: 24px; margin-bottom: 24px; border: 1.5px solid #F1F5F9; }
+        .uf-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f8fafc; padding-bottom: 12px; margin-bottom: 12px; font-weight: 800; font-size: 16px; }
+        .gasto-entry { padding: 20px 0; border-bottom: 1px solid #f8fafc; }
+        .pill { background: #F8FAFC; padding: 6px 10px; border-radius: 10px; font-size: 10px; font-weight: 700; color: var(--text-sub); display: flex; align-items: center; gap: 4px; border: 1px solid #eee; }
+
+        /* CONQUISTAS */
+        .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; justify-items: center; }
+        .badge { display: flex; flex-direction: column; align-items: center; width: 80px; opacity: 0.15; filter: grayscale(1); transition: 0.4s; cursor: pointer; }
+        .badge.active { opacity: 1; filter: grayscale(0); transform: scale(1.05); }
+        .b-icon { width: 52px; height: 52px; background: #F1F5F9; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 6px; }
+        .badge-name { font-size: 9px; font-weight: 800; color: var(--text-sub); text-align: center; text-transform: uppercase; }
+
+        /* FORMULÁRIO */
+        input, select { width: 100%; padding: 14px; border-radius: 14px; border: 1.5px solid #F1F5F9; font-family: inherit; background: #F8FAFC; box-sizing: border-box; }
+        label { font-size: 10px; font-weight: 800; color: var(--text-sub); text-transform: uppercase; margin: 12px 0 4px 4px; display: block; }
+        .btn-acao { background: var(--money); color: #fff; border: none; padding: 16px; border-radius: 18px; width: 100%; font-weight: 800; margin-top: 15px; cursor: pointer; }
+
+        /* POP-UP E MODAIS */
+        #photo-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9); background: #fff; padding: 24px; border-radius: 32px; box-shadow: 0 25px 60px rgba(0,0,0,0.3); z-index: 2100; width: 90%; max-width: 340px; opacity: 0; visibility: hidden; transition: 0.3s; }
+        #photo-popup.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+        .popup-scroll { max-height: 480px; overflow-y: auto; text-align: left; }
+        .carousel-fotos { position: relative; width: 100%; overflow: hidden; border-radius: 20px; margin: 10px 0; height: 180px; background: #f1f5f9; }
+        .track-fotos { display: flex; transition: transform 0.4s ease; height: 100%; }
+        .img-slide { min-width: 100%; height: 100%; object-fit: cover; }
+        .close-popup { position: absolute; top: 12px; right: 12px; background: var(--primary); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; display: flex; align-items: center; justify-content: center; z-index: 3000; cursor: pointer; }
+
+        /* MENU NAV */
+        .menu-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; display: flex; height: 55px; border-top-left-radius: 28px; border-top-right-radius: 28px; z-index: 1000; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); }
+        .btn-aba { flex: 1; border: none; background: none; font-size: 18px; color: #CBD5E1; cursor: pointer; outline: none; transition: 0.3s; -webkit-tap-highlight-color: transparent; }
+        .btn-aba.active { color: var(--primary); transform: translateY(-5px); }
+    </style>
+</head>
+<body>
+
+    <div id="auth-container" style="position:fixed; top:0; left:0; width:100%; height:100%; background:var(--sky); z-index:9000; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;">
+    <div class="card" id="card-auth" style="width:100%; max-width:360px; text-align:center;">
+        <h2 style="color:var(--primary); font-weight:800; margin-bottom:5px;">Ondee 🚩</h2>
+        <p style="font-size:12px; color:var(--text-sub); margin-bottom:20px;">Sua jornada pelo Brasil começa aqui.</p>
+        
+        <div id="inputs-auth">
+            <input type="email" id="auth-email" placeholder="E-mail" style="margin-bottom:10px;">
+            <input type="password" id="auth-senha" placeholder="Senha" style="margin-bottom:10px;">
+            
+            <div id="campos-registro" style="display:none;">
+                <input type="text" id="reg-nome" placeholder="Nome Completo" style="margin-bottom:10px;">
+                <select id="reg-sexo" style="margin-bottom:10px;">
+                    <option value="" disabled selected>Sexo</option>
+                    <option value="M">Masculino</option>
+                    <option value="F">Feminino</option>
+                    <option value="O">Outro</option>
+                </select>
+                <select id="reg-tipo" style="margin-bottom:10px;">
+                    <option value="publico">🌍 Viajante Brasil (Público)</option>
+                    <option value="privado">🔒 Viajante Local (Privado)</option>
+                </select>
+            </div>
+            
+            <button class="btn-acao" onclick="executarAuth()" id="btn-auth-principal">Entrar</button>
+            <p id="toggle-text" style="font-size:11px; margin-top:15px; cursor:pointer; font-weight:700;" onclick="toggleAuthMode()">Não tem conta? Cadastre-se</p>
+        </div>
+    </div>
+
+    <div class="card" id="card-finalizar" style="width:100%; max-width:360px; text-align:center; display:none;">
+        <h3 style="color:var(--money);">Bem-vindo à rede! 🎉</h3>
+        <p style="font-size:12px; margin-bottom:15px;">Vamos configurar seu perfil.</p>
+        
+        <label>Username Único</label>
+        <div style="position:relative;">
+            <input type="text" id="final-username" placeholder="@seu_nome" oninput="verificarDisponibilidade(this.value)">
+            <span id="check-username" style="position:absolute; right:10px; top:12px; font-size:14px;"></span>
+        </div>
+        
+        <label>Sua Bio</label>
+        <input type="text" id="final-bio" placeholder="Ex: Apaixonado por praias e trilhas.">
+        
+        <label>Foto de Perfil</label>
+        <input type="file" id="final-foto" accept="image/*">
+        
+        <button class="btn-acao" id="btn-salvar-final" onclick="salvarPerfilFinal()" disabled>Finalizar Cadastro</button>
+    </div>
+</div>
+
+    <div class="header">
+        <h3>Nossa Jornada 👩‍❤️‍👨</h3>
+        <span id="info">ESTADOS CONQUISTADOS: 0</span>
+    </div>
+
+    
+    <div id="popup-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;display:none;backdrop-filter:blur(4px);" onclick="fecharPopup()"></div>
+    
+    <div id="photo-popup">
+        <button class="close-popup" onclick="fecharPopup()">✕</button>
+        <div id="popup-content" class="popup-scroll"></div>
+    </div>
+    
+<div id="modal-celebracao" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(10px); flex-direction: column; text-align: center; color: white;">
+        <div style="font-size: 100px; margin-bottom: 20px; animation: bounceCustom 1s infinite;">🏆</div>
+        
+        <div style="background: rgba(255,255,255,0.1); padding: 30px; border-radius: 32px; width: 85%; max-width: 340px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
+            <h1 style="margin: 0; font-size: 26px; font-weight: 800; color: #FACC15;">NOVA CONQUISTA!</h1>
+            <p style="font-size: 14px; opacity: 0.8; margin: 10px 0;">Vocês desbloquearam o troféu:</p>
+            
+            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; background: white; color: #1E293B; padding: 15px; border-radius: 20px; margin: 20px 0;">
+                <div id="celebracao-icone" style="font-size: 30px; width: 50px; height: 50px; background: #F1F5F9; border-radius: 50%; display: flex; align-items: center; justify-content: center;"></div>
+                <h3 id="celebracao-nome" style="margin: 0; font-size: 18px; font-weight: 800; flex: 1; text-align: left;"></h3>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button onclick="compartilharNoStories()" style="background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%); color: white; border: none; padding: 15px; border-radius: 18px; font-weight: 800; width: 100%; cursor: pointer;">📸 Compartilhe com sua rede</button>
+                <button onclick="fecharCelebracaoEProxima()" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 12px; border-radius: 18px; font-weight: 700; width: 100%; cursor: pointer;"> Uhuuul! 🔥</button>
+        </div>
+        </div>
+    </div>
+
+    <style>
+    @keyframes bounceCustom { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+    </style>
+
+    <div id="custom-alert" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 5000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div style="background: white; padding: 25px; border-radius: 24px; width: 80%; max-width: 300px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+            <div id="alert-icon" style="font-size: 40px; margin-bottom: 10px;">💡</div>
+            <p id="alert-msg" style="font-weight: 700; color: var(--text-main); margin-bottom: 20px; font-size: 16px;"></p>
+            <button onclick="fecharAlerta()" style="background: var(--money); color: white; border: none; padding: 12px 30px; border-radius: 14px; font-weight: 800; width: 100%; cursor: pointer;">Ciente</button>
+        </div>
+    </div>
+
+    <div id="custom-confirm" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 6000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; padding: 25px; border-radius: 24px; width: 80%; max-width: 300px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+        <div style="font-size: 40px; margin-bottom: 10px;">🗑️</div>
+        <p id="confirm-msg" style="font-weight: 700; color: var(--text-main); margin-bottom: 20px; font-size: 16px;"></p>
+        <div style="display: flex; gap: 10px;">
+            <button id="btn-cancelar" style="background: #F1F5F9; color: var(--primary); border: none; padding: 12px; border-radius: 14px; font-weight: 800; flex: 1; cursor: pointer;">Cancelar</button>
+            <button id="btn-confirmar" style="background: var(--money); color: white; border: none; padding: 12px; border-radius: 14px; font-weight: 800; flex: 1; cursor: pointer;">Apagar</button>
+        </div>
+    </div>
+  </div>
+
+    <div id="aba-mapa" class="aba ativa">
+        <div class="mapa-card">
+            <button onclick="resetarMapa()" style="position: absolute; top: 15px; right: 15px; z-index: 1000; background: white; border: 1.5px solid #F1F5F9; padding: 10px; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;">🔄</button>
+            <div id="svg-container"></div>
+        </div>
+    </div>
+    
+    <div id="aba-timeline" class="aba">
+        <div class="timeline-container">
+            <h3 style="margin: 0 0 25px 20px; color: var(--primary); display: flex; align-items: center; gap: 8px;">📅 Timeline</h3>
+            <div class="timeline-line"></div>
+            <div id="timeline-list"></div>
+        </div>
+    </div>
+    
+    <div id="aba-jornada" class="aba">
+        <div class="card">
+            <h3>🏆 Conquistas</h3>
+            <div class="badge-grid" id="grid-conquistas"></div>
+        </div>
+    </div>
+    
+    <div id="aba-registro" class="aba">
+        <div class="card">
+            <h3>📍 Nova Viagem</h3>
+            <label>Estado</label>
+            <select id="sel-uf">
+                <option value="BRSP" selected>São Paulo</option><option value="BRRJ">Rio de Janeiro</option><option value="BRMG">Minas Gerais</option><option value="BRBA">Bahia</option><option value="BRSC">Santa Catarina</option><option value="BRPR">Paraná</option><option value="BRRS">Rio Grande do Sul</option><option value="BRGO">Goiás</option><option value="BRDF">Distrito Federal</option><option value="BRES">Espírito Santo</option><option value="BRCE">Ceará</option><option value="BRPE">Pernambuco</option><option value="BRRN">Rio Grande do Norte</option><option value="BRPB">Paraíba</option><option value="BRAL">Alagoas</option><option value="BRSE">Sergipe</option><option value="BRMA">Maranhão</option><option value="BRPI">Piauí</option><option value="BRMT">Mato Grosso</option><option value="BRMS">Mato Grosso do Sul</option><option value="BRTO">Tocantins</option><option value="BRPA">Pará</option><option value="BRAM">Amazonas</option><option value="BRRO">Rondônia</option><option value="BRAC">Acre</option><option value="BRRR">Roraima</option><option value="BRAP">Amapá</option>
+            </select>
+            <label>Cidade Visitada</label><input type="text" id="txt-cidade" placeholder="Ex: Brasília">
+            <label>Data da Visita</label><input type="date" id="txt-data">
+            <label style="display:flex; align-items:center; gap:8px; margin:15px 0;"><input type="checkbox" id="chk-praia" style="width:18px;height:18px;"><span style="font-size:12px; font-weight:800; color:var(--text-sub)">VIAGEM DE PRAIA? 🏖️</span></label>
+            <label>Gastos (R$)</label>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;"><input type="number" id="v-hosp" placeholder="Hotel"><input type="number" id="v-trans" placeholder="Transporte"></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:8px;"><input type="number" id="v-alime" placeholder="Comida"><input type="number" id="v-atrac" placeholder="Atrações"></div>
+            <label>Fotos (Máx: 3)</label><input type="file" id="inp-foto" accept="image/*" multiple>
+            <button class="btn-acao" onclick="salvarViagem()">Salvar Memória🚩</button>
+        </div>
+    </div>
+
+    <div id="aba-gastos" class="aba">
+        <div class="card" style="padding:20px 16px;">
+            <h3>💰 Relatório de Viagens</h3>
+            <div id="lista-detalhada-gastos"></div>
+            <div style="background:var(--money); color:#fff; padding:18px; border-radius:22px; text-align:center; font-weight:800; font-size:16px; margin:25px 0 5px 0;" id="total-geral-brasil">Total Brasil: R$ 0,00</div>
+        </div>
+    </div>
+
+    <nav class="menu-nav">
+        <button class="btn-aba active" onclick="trocarAba('mapa', this)">🗺️</button>
+        <button class="btn-aba" onclick="trocarAba('timeline', this)">🕒</button>
+        <button class="btn-aba" onclick="trocarAba('jornada', this)">🏆</button>
+        <button class="btn-aba" onclick="trocarAba('registro', this)">➕</button>
+        <button class="btn-aba" onclick="trocarAba('gastos', this)">💰</button>
+    </nav>
+    
+    <script>
+    // 1. CONFIGURAÇÃO FIREBASE
+    const firebaseConfig = {
+         apiKey: "AIzaSyDUBAP9atHjoVLRYzxQPhMAZnJUR2v1j7w",
+         authDomain: "pjrsddinst-00pjrsddinst-01.firebaseapp.com",
+         databaseURL: "https://pjrsddinst-00pjrsddinst-01-default-rtdb.firebaseio.com",
+         projectId: "pjrsddinst-00pjrsddinst-01",
+         storageBucket: "pjrsddinst-00pjrsddinst-01.firebasestorage.app",
+         messagingSenderId: "382938083344",
+         appId: "1:382938083344:web:ce1bcff1ba8f45cafa9a95",
+         measurementId: "G-ZGJGJT8BYD"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // 2. VARIÁVEIS GLOBAIS
+    let dbGlobal = {};
+    let controleMapa;
+    let conquistasAnteriores = []; // Controla o que já foi celebrado
+    let userLogado = null;
+    let modoRegistro = false;
+    let dadosUsuario = null;     // Dados do perfil (DB) do dono do celular (tipo, bio, etc)
+    let perfilEmFoco = null;     // De QUEM é o perfil que estamos vendo na tela agora
+    
+    const REGIOES = {
+        'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
+        'NORDESTE': { icon: '🌵', color: '#FACC15', UFs: ['BRMA','BRPI','BRCE','BRRN','BRPB','BRPE','BRAL','BRSE','BRBA'], nomes: ['Maranhão','Piauí','Ceará','Rio Grande do Norte','Paraíba','Pernambuco','Alagoas','Sergipe','Bahia'] },
+        'CENTRO': { icon: '☀️', color: '#FB923C', UFs: ['BRMT','BRMS','BRGO','BRDF'], nomes: ['Mato Grosso','Mato Grosso do Sul','Goiás','Distrito Federal'] },
+        'SUDESTE': { icon: '🏢', color: '#EC4899', UFs: ['BRMG','BRSP','BRRJ','BRES'], nomes: ['Minas Gerais','São Paulo','Rio de Janeiro','Espírito Santo'] },
+        'SUL': { icon: '❄️', color: '#A855F7', UFs: ['BRPR','BRSC','BRRS'], nomes: ['Paraná','Santa Catarina','Rio Grande do Sul'] }
+    };
+
+    
+    let userLogado = null;
+let modoRegistro = false;
+
+// Observador de Autenticação
+firebase.auth().onAuthStateChanged(async (user) => {
+    if (user) {
+        userLogado = user;
+        const snap = await database.ref(`users/${user.uid}/perfil`).once('value');
+        const perfil = snap.val();
+
+        if (!perfil || !perfil.username) {
+            // Se logou mas não tem username, força finalização
+            document.getElementById('card-auth').style.display = 'none';
+            document.getElementById('card-finalizar').style.display = 'block';
+        } else {
+            // Se está tudo ok, entra no app
+            document.getElementById('auth-container').style.display = 'none';
+            initApp(perfil);
+        }
+    } else {
+        document.getElementById('auth-container').style.display = 'flex';
+    }
+});
+
+async function executarAuth() {
+    const email = document.getElementById('auth-email').value;
+    const senha = document.getElementById('auth-senha').value;
+
+    if (modoRegistro) {
+        try {
+            await firebase.auth().createUserWithEmailAndPassword(email, senha);
+            mostrarAlerta("Conta criada com sucesso! 🎉", "✅");
+            // O onAuthStateChanged vai detectar e mostrar o card-finalizar
+        } catch (e) { mostrarAlerta(e.message, "❌"); }
+    } else {
+        try { await firebase.auth().signInWithEmailAndPassword(email, senha); }
+        catch (e) { mostrarAlerta("Dados inválidos.", "❌"); }
+    }
+}
+
+async function verificarDisponibilidade(user) {
+    const username = user.toLowerCase().replace('@', '').trim();
+    const elCheck = document.getElementById('check-username');
+    const btn = document.getElementById('btn-salvar-final');
+    
+    if (username.length < 3) {
+        elCheck.innerText = "❌";
+        btn.disabled = true;
+        return;
+    }
+
+    const snap = await database.ref('usernames').child(username).once('value');
+    if (snap.exists()) {
+        elCheck.innerText = "❌";
+        btn.disabled = true;
+    } else {
+        elCheck.innerText = "✅";
+        btn.disabled = false;
+    }
+}
+
+async function salvarPerfilFinal() {
+    const user = firebase.auth().currentUser;
+    const username = document.getElementById('final-username').value.toLowerCase().replace('@', '');
+    const bio = document.getElementById('final-bio').value;
+    const tipo = document.getElementById('reg-tipo').value;
+    
+    // Salva o link de username para garantir que ninguém pegue o mesmo
+    await database.ref(`usernames/${username}`).set(user.uid);
+    
+    // Salva o perfil
+    await database.ref(`users/${user.uid}/perfil`).update({
+        username, bio, tipo, 
+        nome: document.getElementById('reg-nome').value,
+        sexo: document.getElementById('reg-sexo').value,
+        uid: user.uid
+    });
+    
+    location.reload(); // Recarrega para iniciar o app com os dados novos
+}    
+        
+        
+    // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
+    async function verPerfil(uidAlvo) {
+    // 1. Busca os dados do perfil (Bio, Tipo, Username)
+    const snapPerfil = await database.ref(`users/${uidAlvo}/perfil`).once('value');
+    const dadosAlvo = snapPerfil.val();
+
+    if (!dadosAlvo) {
+        mostrarAlerta("Usuário não encontrado.", "❌");
+        return;
+    }
+
+    // 2. ATUALIZA O FOCO: Aqui a mágica acontece
+    perfilEmFoco = dadosAlvo;
+
+    // 3. Busca as viagens desse usuário específico
+    const snapViagens = await database.ref(`users/${uidAlvo}/viagens`).once('value');
+    dbGlobal = snapViagens.val() || {}; // Substitui os dados locais pelos dele
+
+    // 4. Atualiza a Interface
+    atualizarInterface(); // Pinta o mapa com as cores dele
+    renderTimeline();     // Renderiza a timeline dele (ou o cadeado se for privado)
+    renderJornada();      // Mostra as conquistas dele
+    
+    // 5. Ajusta o Header para mostrar o nome de quem você está vendo
+    document.getElementById('user-badge').innerText = `@${dadosAlvo.username}`;
+    
+    // Se não for você mesmo, podemos mostrar um botão de "Voltar para meu Perfil"
+    if (uidAlvo !== userLogado.uid) {
+        document.getElementById('info').innerHTML = `VISITANDO PERFIL <button onclick="verPerfil(userLogado.uid)" style="font-size:9px; background:var(--primary); color:white; border:none; border-radius:5px; padding:2px 5px; margin-left:5px;">VER MEU MAPA</button>`;
+    } else {
+        document.getElementById('info').innerText = `ESTADOS CONQUISTADOS: ${Object.keys(dbGlobal).length}`;
+    }
+
+    // Fecha qualquer popup aberto e volta para a aba mapa
+    fecharPopup();
+    trocarAba('mapa', document.querySelectorAll('.btn-aba')[0]);
+}
+        
+    function mostrarAlerta(msg, icon = '💡') {
+        document.getElementById('alert-msg').innerText = msg;
+        document.getElementById('alert-icon').innerText = icon;
+        document.getElementById('custom-alert').style.display = 'flex';
+    }
+
+    function fecharAlerta() { document.getElementById('custom-alert').style.display = 'none'; }
+    function fecharPopup() {
+        document.getElementById('photo-popup').classList.remove('show');
+        document.getElementById('popup-overlay').style.display = 'none';
+    }
+
+    function mostrarProximaConquistaDaFila() {
+    if (filaDeConquistas.length === 0) return;
+
+    const conquista = filaDeConquistas[0]; // Pega a primeira da fila
+    const modal = document.getElementById('modal-celebracao');
+    
+    document.getElementById('celebracao-nome').innerText = conquista.nome;
+    document.getElementById('celebracao-icone').innerText = conquista.icone;
+    
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    
+    modal.style.display = 'flex';
+}
+
+// ESTA FUNÇÃO VAI NO BOTÃO "UHUL!" DO SEU HTML
+function fecharCelebracaoEProxima() {
+    // Remove a conquista que acabou de ser mostrada da fila
+    filaDeConquistas.shift();
+    
+    // Fecha o modal
+    document.getElementById('modal-celebracao').style.display = 'none';
+    
+    // Se ainda tiver coisa na fila, espera um pouquinho e abre a próxima
+    if (filaDeConquistas.length > 0) {
+        setTimeout(() => {
+            mostrarProximaConquistaDaFila();
+        }, 600); // Meio segundo de intervalo entre um troféu e outro
+    }
+}
+
+    async function compartilharNoStories() {
+    const mapaElemento = document.querySelector('.mapa-card');
+    
+    // Tira um "print" do mapa colorido
+    const canvas = await html2canvas(mapaElemento);
+    const dataUrl = canvas.toDataURL('image/png');
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], 'meu-mapa.png', { type: 'image/png' });
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Nossa Jornada',
+                text: 'Olha como está ficando nosso mapa do Brasil! 🇧🇷',
+                files: [file] // Envia a foto real do mapa colorido!
+            });
+        } catch (err) {
+            console.error("Erro ao compartilhar:", err);
+        }
+    }
+}
+
+   let filaDeConquistas = [];
+
+function verificarNovasConquistas() {
+    const metas = [
+        {id: 'm1', n:1, l:'Início da Jornada', i:'🌱'}, 
+        {id: 'm5', n:5, l:'Exploradores Estaduais', i:'🏃'}, 
+        {id: 'm10', n:10, l:'Casal Aventureiro', i:'⭐'}, 
+        {id: 'm20', n:20, l:'Casal Explorador', i:'🔥'}, 
+        {id: 'm26', n:26, l:'Conquistadores do Brasil', i:'👑'}
+    ];
+    
+    const visitados = Object.keys(dbGlobal || {});
+    let novasNestaRodada = [];
+
+    // Lê o que está salvo no celular
+    const celebradosNoHistorico = JSON.parse(localStorage.getItem('conquistas_vistas') || "[]");
+
+    // 1. Verifica Metas Numéricas
+    metas.forEach(m => {
+        if (visitados.length >= m.n && !celebradosNoHistorico.includes(m.id)) {
+            novasNestaRodada.push({nome: m.l, icone: m.i, id: m.id});
+        }
+    });
+    
+    // 2. Verifica Meta de Praia
+    let temPraia = false; 
+    for(let u in dbGlobal) { 
+        for(let id in dbGlobal[u]) { 
+            if(dbGlobal[u][id].praia) temPraia = true; 
+        } 
+    }
+    if (temPraia && !celebradosNoHistorico.includes('praia')) {
+        novasNestaRodada.push({nome: '🏖️ Pé na Areia', icone: '🏖️', id: 'praia'});
+    }
+
+    // Se houver novas, adiciona na fila e salva na nuvem e local
+    if (novasNestaRodada.length > 0) {
+        filaDeConquistas = [...filaDeConquistas, ...novasNestaRodada];
+        
+        const novoHistorico = [...celebradosNoHistorico, ...novasNestaRodada.map(n => n.id)];
+        
+        // Salva no LocalStorage (celular)
+        localStorage.setItem('conquistas_vistas', JSON.stringify(novoHistorico));
+        
+        // Salva no Firebase (nuvem)
+        novasNestaRodada.forEach(n => {
+            database.ref('conquistas_vistas/' + n.id).set(true);
+        });
+        
+        if (document.getElementById('modal-celebracao').style.display !== 'flex') {
+            mostrarProximaConquistaDaFila();
+        }
+    }
+}
+
+    function converter(f) { 
+        return new Promise(r => { 
+            const rd = new FileReader(); 
+            rd.readAsDataURL(f); 
+            rd.onload = () => { 
+                const img = new Image(); 
+                img.src = rd.result; 
+                img.onload = () => { 
+                    const cv = document.createElement('canvas'); 
+                    const ctx = cv.getContext('2d'); 
+                    cv.width = 600; 
+                    cv.height = 600 * (img.height/img.width); 
+                    ctx.drawImage(img, 0, 0, cv.width, cv.height); 
+                    r(cv.toDataURL('image/jpeg', 0.6)); 
+                }; 
+            }; 
+        }); 
+    }
+
+    // 4. FUNÇÕES DE RENDERIZAÇÃO
+    function renderTimeline() {
+    const lista = document.getElementById('timeline-list');
+    lista.innerHTML = '';
+    
+    let todasViagens = [];
+    Object.keys(dbGlobal).forEach(uf => {
+        Object.keys(dbGlobal[uf]).forEach(id => {
+            todasViagens.push({ ...dbGlobal[uf][id], uf, idFirebase: id });
+        });
+    });
+
+    todasViagens.sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
+
+    todasViagens.forEach(v => {
+        let track = ''; 
+        let bullets = '';
+        
+        if(v.fotos && v.fotos.length > 0) {
+            v.fotos.forEach((f, idx) => { 
+                track += `<img src="${f}" class="img-slide" style="width:100%; height:200px; object-fit:cover;">`; 
+                bullets += `<div class="bullet-tl-${v.idFirebase}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`;
+            });
+        }
+
+        const item = document.createElement('div');
+        item.className = 'timeline-item';
+        item.innerHTML = `
+            <div class="t-dot"></div>
+            <div class="t-card" style="padding: 12px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <div>
+                        <b style="color: var(--primary); font-size: 12px;">${v.uf.replace('BR','')}</b>
+                        <h4 style="margin:0; font-size: 15px;">${v.cidade}</h4>
+                    </div>
+                    <span style="font-size: 10px; color: var(--text-sub);">${v.data}</span>
+                </div>
+
+                <div class="carousel-fotos" id="tl-car-${v.idFirebase}" style="height:200px; position:relative; border-radius: 15px;" 
+                     ontouchstart="hTS(event)" 
+                     ontouchmove="hTM_TL(event, '${v.idFirebase}', ${v.fotos ? v.fotos.length : 0})">
+                    <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
+                        ${track || '<div style="width:100%; height:200px; background:#eee; display:flex; align-items:center; justify-content:center;">📍 Sem fotos</div>'}
+                    </div>
+                    <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
+                        ${bullets}
+                    </div>
+                </div>
+
+                <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 10px; background: #f1f5f9; padding: 4px 8px; border-radius: 8px;">R$ ${v.total.toLocaleString('pt-BR')}</span>
+                    <button onclick="removerViagem('${v.uf}', '${v.idFirebase}', '${v.cidade}')" style="background:none; border:none; font-size:14px; opacity:0.3;">🗑️</button>
+                </div>
+            </div>
+        `;
+        lista.appendChild(item);
+    });
+}
+
+    function renderGastos() {
+        let html = '', totalGeral = 0;
+        for (const uf in dbGlobal) {
+            let totalUF = 0, cidadesHtml = '';
+            for(let id in dbGlobal[uf]) {
+                const c = dbGlobal[uf][id];
+                const valorViagem = parseFloat(c.total) || 0;
+                totalUF += valorViagem;
+                cidadesHtml += `<div class="gasto-entry" style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;"><span style="font-size: 13px; font-weight: 600; color: var(--text-main);">${c.cidade} - ${c.data}</span><strong style="color: var(--money); font-size: 13px;">${valorViagem.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div><div style="display: flex; flex-wrap: wrap; gap: 6px;"><div class="pill">🏨 ${parseFloat(c.h).toLocaleString('pt-BR')}</div><div class="pill">🚗 ${parseFloat(c.t).toLocaleString('pt-BR')}</div><div class="pill">🍴 ${parseFloat(c.al).toLocaleString('pt-BR')}</div><div class="pill">🎡 ${parseFloat(c.at).toLocaleString('pt-BR')}</div></div></div>`;
+            }
+            totalGeral += totalUF;
+            html += `<div class="resumo-uf-card"><div class="uf-header" style="display: flex; justify-content: space-between; align-items: center;"><span>🚩 ${uf.replace('BR','')}</span><span style="color: var(--money); font-weight: 800;">${totalUF.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>${cidadesHtml}</div>`;
+        }
+        document.getElementById('lista-detalhada-gastos').innerHTML = html || '<p style="text-align:center;padding:20px;color:#999">Sem gastos registrados.</p>';
+        document.getElementById('total-geral-brasil').innerText = `Total Brasil: ${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+    }
+
+    function renderJornada() {
+        const visitados = Object.keys(dbGlobal);
+        let html = '';
+        const metas = [{n:1, l:'Início', i:'🌱'}, {n:5, l:'5 Estados', i:'🏃'}, {n:10, l:'10 Estados', i:'⭐'}, {n:20, l:'20 Estados', i:'🔥'}, {n:26, l:'Brasil', i:'👑'}];
+        metas.forEach(m => {
+            const ok = visitados.length >= m.n;
+            html += `<div class="badge ${ok ? 'active' : ''}" onclick="if(!${ok}) mostrarAlerta('Faltam ${m.n - visitados.length} estados!', '🏃')"><div class="b-icon">${m.i}</div><div class="badge-name">${m.l}</div></div>`;
+        });
+        let temPraia = false; 
+        for(let u in dbGlobal) { for(let id in dbGlobal[u]) { if(dbGlobal[u][id].praia) temPraia = true; } }
+        html += `<div class="badge ${temPraia ? 'active' : ''}" onclick="if(!${temPraia}) mostrarAlerta('Visite uma praia para liberar!', '🏖️')"><div class="b-icon">🏖️</div><div class="badge-name">Pé na areia</div></div>`;
+        for(let r in REGIOES) {
+            const reg = REGIOES[r]; 
+            const vNaReg = reg.UFs.filter(u => visitados.includes(u)); 
+            const ok = vNaReg.length === reg.UFs.length;
+            html += `<div class="badge ${ok ? 'active' : ''}" onclick="msgRegiao('${r}', ${ok})"><div class="b-icon" style="${ok ? 'background:'+reg.color+';color:#fff' : ''}">${reg.icon}</div><div class="badge-name">${r}</div></div>`;
+        }
+        document.getElementById('grid-conquistas').innerHTML = html;
+    }
+
+    function trocarAba(id, btn) {
+        document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
+        document.querySelectorAll('.btn-aba').forEach(b => b.classList.remove('active'));
+        document.getElementById('aba-' + id).classList.add('ativa');
+        btn.classList.add('active');
+        if(id === 'gastos') renderGastos();
+        if(id === 'jornada') renderJornada();
+        if(id === 'timeline') renderTimeline();
+    }
+
+    async function salvarViagem() {
+    const elUf = document.getElementById('sel-uf'), 
+          elCidade = document.getElementById('txt-cidade'), 
+          elData = document.getElementById('txt-data'), 
+          elHosp = document.getElementById('v-hosp'), 
+          elTrans = document.getElementById('v-trans'), 
+          elAlime = document.getElementById('v-alime'), 
+          elAtrac = document.getElementById('v-atrac'), 
+          elFoto = document.getElementById('inp-foto'), 
+          elPraia = document.getElementById('chk-praia');
+
+    if (!userLogado) return mostrarAlerta("Você precisa estar logado.", "🔒");
+    if (!elCidade.value.trim()) return mostrarAlerta("Digite o nome da cidade.", "📍");
+    if (!elData.value) return mostrarAlerta("Data é obrigatória.", "📅");
+
+    const h = parseFloat(elHosp.value) || 0, 
+          t = parseFloat(elTrans.value) || 0, 
+          al = parseFloat(elAlime.value) || 0, 
+          at = parseFloat(elAtrac.value) || 0;
+
+    const files = elFoto.files; 
+    let fotos = []; 
+    for (let i = 0; i < Math.min(files.length, 3); i++) { 
+        fotos.push(await converter(files[i])); 
+    }
+
+    const tripId = database.ref().child('posts').push().key; // Gera ID único
+    const trip = { 
+        id: tripId,
+        uid: userLogado.uid,
+        cidade: elCidade.value, 
+        uf: elUf.value, 
+        data: elData.value.split('-').reverse().join('/'), 
+        rawDate: elData.value, 
+        fotos, h, t, al, at, 
+        praia: elPraia.checked, 
+        total: h + t + al + at 
+    };
+
+    // Objeto de atualização múltipla (Atomic Update)
+    let updates = {};
+    // 1. Salva no perfil do usuário
+    updates[`users/${userLogado.uid}/viagens/${elUf.value}/${tripId}`] = trip;
+
+    // 2. Se for Viajante Brasil (Público), salva no Feed Global
+    // Nota: 'dadosUsuario' deve ser a variável onde você guardou o perfil dele (tipo, username, etc)
+    if (dadosUsuario.tipo === 'publico') {
+        updates[`feed_global/${tripId}`] = {
+            ...trip,
+            username: dadosUsuario.username,
+            fotoPerfil: dadosUsuario.foto || ''
+        };
+    }
+
+    database.ref().update(updates).then(() => {
+        elCidade.value = ""; elData.value = ""; elHosp.value = ""; 
+        elTrans.value = ""; elAlime.value = ""; elAtrac.value = ""; 
+        elFoto.value = ""; elPraia.checked = false;
+        mostrarAlerta("Memória salva na sua jornada!", "📌");
+        trocarAba('mapa', document.querySelectorAll('.btn-aba')[0]);
+    });
+}
+
+    function removerViagem(uf, idFirebase, cidade) {
+        const modal = document.getElementById('custom-confirm');
+        const btnSim = document.getElementById('btn-confirmar');
+        const btnNao = document.getElementById('btn-cancelar');
+        document.getElementById('confirm-msg').innerText = `Deseja apagar a memória de ${cidade}?`;
+        modal.style.display = 'flex';
+        btnNao.onclick = () => { modal.style.display = 'none'; };
+        btnSim.onclick = () => {
+            database.ref('viagens/' + uf + '/' + idFirebase).remove();
+            modal.style.display = 'none';
+            mostrarAlerta("Memória apagada!", "🗑️");
+        };
+    }
+
+    function msgRegiao(r, ok) { 
+        if(ok) return; 
+        const faltantes = REGIOES[r].nomes.filter((n, i) => !Object.keys(dbGlobal).includes(REGIOES[r].UFs[i])); 
+        mostrarAlerta(`Faltam no ${r}: ${faltantes.join(', ')}`, "🌵"); 
+    }
+
+    function resetarMapa() {
+        if (controleMapa) { controleMapa.resetZoom(); controleMapa.center(); controleMapa.fit(); }
+    }
+
+    function abrirHistorico(id) {
+    // 1. Verifica Privacidade
+    // Se o perfil que estamos vendo (perfilEmFoco) for privado e eu não for o dono
+    const isOwner = userLogado && (perfilEmFoco.uid === userLogado.uid);
+    const isFriend = false; // Lógica de amigos será implementada depois
+
+    if (perfilEmFoco.tipo === 'privado' && !isOwner && !isFriend) {
+        mostrarAlerta("Perfil Privado: Adicione para ver as memórias", "🔒");
+        return; 
+    }
+
+    // 2. Renderização Original do Pop-up (Mantida como você pediu)
+    const listaObj = dbGlobal[id]; 
+    if (!listaObj) return;
+
+    let h = `<h2 style="color:var(--primary); margin:0 0 15px 10px; font-size:20px; font-weight:800;">🚩 ${id.replace('BR','')}</h2>`;
+    
+    Object.keys(listaObj).forEach((idFirebase) => {
+        const v = listaObj[idFirebase];
+        let track = ''; let bullets = '';
+        if(v.fotos) {
+            v.fotos.forEach((f, idx) => { 
+                track += `<img src="${f}" class="img-slide" style="width:100%; height:300px; object-fit:cover;">`; 
+                bullets += `<div class="bullet-${idFirebase}" style="width:6px; height:6px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`;
+            });
+        }
+        h += `<div style="margin-bottom:20px; border-radius:24px; overflow:hidden; position:relative; background:#f1f5f9; box-shadow:0 10px 20px rgba(0,0,0,0.05);">
+                <div class="carousel-fotos" id="car-${idFirebase}" style="height:300px; position:relative;" ontouchstart="hTS(event)" ontouchmove="hTM(event, '${idFirebase}', ${v.fotos ? v.fotos.length : 0})">
+                    <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">${track || '<div style="width:100%; height:300px; background:#eee; display:flex; align-items:center; justify-content:center;">📍 Sem fotos</div>'}</div>
+                    <div style="position:absolute; bottom:0; left:0; width:100%; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding:15px; box-sizing:border-box; pointer-events:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                            <div><p style="margin:0; font-size:15px; font-weight:700; color:white;">${v.cidade}</p><span style="font-size:10px; color:rgba(255,255,255,0.7); font-weight:600;">${v.data}</span></div>
+                            <span style="color:#4ade80; font-weight:800; font-size:13px; background:rgba(0,0,0,0.3); padding:4px 8px; border-radius:8px;">${v.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                        <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">${bullets}</div>
+                    </div>
+                </div>
+              </div>`;
+    });
+
+    document.getElementById('popup-content').innerHTML = h;
+    document.getElementById('photo-popup').classList.add('show');
+    document.getElementById('popup-overlay').style.display = 'block';
+}
+
+    let sX = 0; function hTS(e) { sX = e.touches[0].clientX; }
+    function hTM(e, idF, len) { 
+        if (!sX) return; 
+        let d = sX - e.touches[0].clientX; 
+        let tr = document.querySelector(`#car-${idF} .track-fotos`); 
+        let curIdx = Math.round(Math.abs(new WebKitCSSMatrix(window.getComputedStyle(tr).transform).m41 / tr.offsetWidth)); 
+        if (Math.abs(d) > 40) { 
+            if (d > 0 && curIdx < len - 1) curIdx++; else if (d < 0 && curIdx > 0) curIdx--; 
+            tr.style.transform = `translateX(-${curIdx * 100}%)`; 
+            document.querySelectorAll(`.bullet-${idF}`).forEach((b, i) => {
+                b.style.background = (i === curIdx) ? 'white' : 'rgba(255,255,255,0.4)';
+                b.style.transform = (i === curIdx) ? 'scale(1.2)' : 'scale(1)';
+            });
+            sX = 0; 
+        } 
+    }
+
+    // Função de deslize específica para os carrosséis da Timeline
+    function hTM_TL(e, idF, len) { 
+    if (!sX) return; 
+    let d = sX - e.touches[0].clientX; 
+    let tr = document.querySelector(`#tl-car-${idF} .track-fotos`); 
+    if(!tr) return;
+    
+    let curIdx = Math.round(Math.abs(new WebKitCSSMatrix(window.getComputedStyle(tr).transform).m41 / tr.offsetWidth)); 
+    
+    if (Math.abs(d) > 40) { 
+        if (d > 0 && curIdx < len - 1) curIdx++; 
+        else if (d < 0 && curIdx > 0) curIdx--; 
+        
+        tr.style.transform = `translateX(-${curIdx * 100}%)`; 
+        document.querySelectorAll(`.bullet-tl-${idF}`).forEach((b, i) => {
+            b.style.background = (i === curIdx) ? 'white' : 'rgba(255,255,255,0.4)';
+        });
+        sX = 0; 
+    } 
+}
+        
+    function atualizarInterface() { 
+    document.querySelectorAll('path').forEach(p => p.classList.remove('visitado'));
+    Object.keys(dbGlobal).forEach(u => { const el = document.getElementById(u); if(el) el.classList.add('visitado'); }); 
+    document.getElementById('info').innerText = `ESTADOS CONQUISTADOS: ${Object.keys(dbGlobal).length}`; 
+    }
+
+    async function init() {
+    const res = await fetch('br.svg');
+    const svg = await res.text();
+    document.getElementById('svg-container').innerHTML = svg;
+    const svgEl = document.querySelector('#svg-container svg');
+    svgEl.id = "mapa-svg-real"; svgEl.style.width = "100%"; svgEl.style.height = "100%";
+    
+    controleMapa = svgPanZoom('#mapa-svg-real', { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, zoomScaleSensitivity: 0.3, minZoom: 0.5, maxZoom: 10 });
+
+    document.getElementById('svg-container').addEventListener('touchend', (e) => {
+        const target = e.target.closest('path');
+        if (target && target.id) abrirHistorico(target.id);
+    });
+
+    // SINCRONIZAÇÃO: Busca no Firebase e salva no LocalStorage do celular
+    database.ref('conquistas_vistas').on('value', (snapshot) => {
+        const dados = snapshot.val() || {};
+        conquistasDesbloqueadas = dados;
+        const idsVistos = Object.keys(dados);
+        localStorage.setItem('conquistas_vistas', JSON.stringify(idsVistos));
+    });
+
+    // ESCUTA AS VIAGENS
+    database.ref('viagens').on('value', (snapshot) => {
+        dbGlobal = snapshot.val() || {};
+        atualizarInterface();
+        verificarNovasConquistas(); 
+        renderTimeline();
+        renderGastos();
+        renderJornada();
+    });
+}      
+    init();
+</script>
+</body>
+</html>
     
    
