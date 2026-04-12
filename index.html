@@ -708,30 +708,37 @@
 function reagirViagem(idEstado, idViagem, emoji) {
     const donoPostUID = uidSendoVisualizado;
     const minhaID = usuarioLogado.uid;
+    
+    // Caminho no Firebase: usuarios/UID_DONO/viagens/UF/ID_VIAGEM/reacoes/MEU_UID
     const refReacao = database.ref(`usuarios/${donoPostUID}/viagens/${idEstado}/${idViagem}/reacoes/${minhaID}`);
 
     refReacao.once('value').then(snap => {
-        // Se eu já reagi com esse mesmo emoji, eu removo (toggle)
         if (snap.exists() && snap.val().emoji === emoji) {
+            // 1. Se eu já reagi com este emoji exato, eu removo a reação
             refReacao.remove();
         } else {
-            // Salva a reação
+            // 2. Se não reagi ou mudei de emoji, eu salvo/atualizo
             refReacao.set({
                 emoji: emoji,
                 username: usuarioLogado.username,
                 timestamp: Date.now()
             });
 
-            // Envia notificação para o dono (se não for eu mesmo)
+            // 3. ENVIAR NOTIFICAÇÃO (apenas se não for minha própria viagem)
             if (donoPostUID !== minhaID) {
                 database.ref(`notificacoes/${donoPostUID}`).push({
                     tipo: 'curtida',
                     from: minhaID,
                     msg: `@${usuarioLogado.username} reagiu com ${emoji} na sua viagem para ${idEstado.replace('BR','')}.`,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    lida: false
                 });
             }
         }
+    }).catch(error => {
+        console.error("Erro ao reagir:", error);
+    });
+} // <--- CHAVETA DE FECHAMENTO QUE FALTAVA
 
     function enviarComentario(idEstado, idViagem) {
     const input = document.getElementById(`input-coment-${idViagem}`);
