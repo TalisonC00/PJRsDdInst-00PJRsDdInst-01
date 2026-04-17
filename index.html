@@ -1067,14 +1067,23 @@ function escutarNotificacoes() {
     const badge = document.getElementById('badge-notif');
     if (!badge) return;
 
+    // O listener .on garante que se o dado sumir do banco, ele some da tela NA HORA
     database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
         const notifs = snap.val();
         if (notifs) {
-            const naoLidas = Object.values(notifs).filter(n => !n.lido).length;
-            badge.innerText = naoLidas;
-            badge.style.display = naoLidas > 0 ? 'flex' : 'none';
+            // Filtra apenas as que existem e não foram lidas
+            const naoLidas = Object.values(notifs).filter(n => n && !n.lido).length;
+            
+            if (naoLidas > 0) {
+                badge.innerText = naoLidas;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
         } else {
+            // Se o nó de notificações estiver vazio, limpa tudo
             badge.style.display = 'none';
+            badge.innerText = '0';
         }
     });
 }
