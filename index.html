@@ -250,14 +250,14 @@
     <script>
     // 1. CONFIGURAÇÃO FIREBASE
 const firebaseConfig = {
-         apiKey: "AIzaSyDUBAP9atHjoVLRYzxQPhMAZnJUR2v1j7w",
-         authDomain: "pjrsddinst-00pjrsddinst-01.firebaseapp.com",
-         databaseURL: "https://pjrsddinst-00pjrsddinst-01-default-rtdb.firebaseio.com",
-         projectId: "pjrsddinst-00pjrsddinst-01",
-         storageBucket: "pjrsddinst-00pjrsddinst-01.firebasestorage.app",
-         messagingSenderId: "382938083344",
-         appId: "1:382938083344:web:ce1bcff1ba8f45cafa9a95",
-         measurementId: "G-ZGJGJT8BYD"
+    apiKey: "AIzaSyDUBAP9atHjoVLRYzxQPhMAZnJUR2v1j7w",
+    authDomain: "pjrsddinst-00pjrsddinst-01.firebaseapp.com",
+    databaseURL: "https://pjrsddinst-00pjrsddinst-01-default-rtdb.firebaseio.com",
+    projectId: "pjrsddinst-00pjrsddinst-01",
+    storageBucket: "pjrsddinst-00pjrsddinst-01.firebasestorage.app",
+    messagingSenderId: "382938083344",
+    appId: "1:382938083344:web:ce1bcff1ba8f45cafa9a95",
+    measurementId: "G-ZGJGJT8BYD"
     };
 
 firebase.initializeApp(firebaseConfig);
@@ -283,40 +283,62 @@ const REGIOES = {
 
 // Observador de Autenticação
 firebase.auth().onAuthStateChanged(async (user) => {
-    if (user) {
-        userLogado = user;
-        const snap = await database.ref(`users/${user.uid}/perfil`).once('value');
-        const perfil = snap.val();
+        if (user) {
+            userLogado = user;
+            // Busca o perfil do usuário logado
+            const snap = await database.ref(`users/${user.uid}/perfil`).once('value');
+            const perfil = snap.val();
 
-        if (!perfil || !perfil.username) {
-            // Se logou mas não tem username, força finalização
-            document.getElementById('card-auth').style.display = 'none';
-            document.getElementById('card-finalizar').style.display = 'block';
+            if (!perfil || !perfil.username) {
+                document.getElementById('card-auth').style.display = 'none';
+                document.getElementById('card-finalizar').style.display = 'block';
+            } else {
+                document.getElementById('auth-container').style.display = 'none';
+                initApp(perfil);
+            }
         } else {
-            // Se está tudo ok, entra no app
-            document.getElementById('auth-container').style.display = 'none';
-            initApp(perfil);
+            userLogado = null;
+            document.getElementById('auth-container').style.display = 'flex';
+            document.getElementById('card-auth').style.display = 'block';
+            document.getElementById('card-finalizar').style.display = 'none';
         }
-    } else {
-        document.getElementById('auth-container').style.display = 'flex';
-    }
-});
+    });
 
 async function executarAuth() {
-    const email = document.getElementById('auth-email').value;
-    const senha = document.getElementById('auth-senha').value;
+        const email = document.getElementById('auth-email').value;
+        const senha = document.getElementById('auth-senha').value;
 
-    if (modoRegistro) {
+        if (!email || !senha) return mostrarAlerta("Preencha todos os campos.", "⚠️");
+
         try {
-            await firebase.auth().createUserWithEmailAndPassword(email, senha);
-            mostrarAlerta("Conta criada com sucesso! 🎉", "✅");
-            // O onAuthStateChanged vai detectar e mostrar o card-finalizar
-        } catch (e) { mostrarAlerta(e.message, "❌"); }
-    } else {
-        try { await firebase.auth().signInWithEmailAndPassword(email, senha); }
-        catch (e) { mostrarAlerta("Dados inválidos.", "❌"); }
+            if (modoRegistro) {
+                // Captura os dados iniciais do cadastro
+                const tipo = document.getElementById('reg-tipo').value;
+                const nome = document.getElementById('reg-nome').value;
+                const sexo = document.getElementById('reg-sexo').value;
+
+                if(!nome || !sexo) return mostrarAlerta("Nome e Sexo são obrigatórios.", "⚠️");
+
+                const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, senha);
+                
+                // Salva os dados básicos iniciais
+                await database.ref(`users/${userCredential.user.uid}/perfil`).set({
+                    nome: nome,
+                    sexo: sexo,
+                    tipo: tipo,
+                    uid: userCredential.user.uid,
+                    criadoEm: new Date().toISOString()
+                });
+                
+                mostrarAlerta("Conta criada! 🎉", "✅");
+            } else {
+                await firebase.auth().signInWithEmailAndPassword(email, senha);
+            }
+        } catch (e) { 
+            console.error(e);
+            mostrarAlerta("Erro: " + e.message, "❌"); 
+        }
     }
-}
 
 async function verificarDisponibilidade(user) {
         const username = user.toLowerCase().replace('@', '').trim();
@@ -329,20 +351,21 @@ async function verificarDisponibilidade(user) {
     }
 
 async function salvarPerfilFinal() {
-        const user = firebase.auth().currentUser;
-        const username = document.getElementById('final-username').value.toLowerCase().replace('@', '');
-        const bio = document.getElementById('final-bio').value;
-        const tipo = document.getElementById('reg-tipo').value;
-        
-        await database.ref(`usernames/${username}`).set(user.uid);
-        await database.ref(`users/${user.uid}/perfil`).update({
-            username, bio, tipo, 
-            nome: document.getElementById('reg-nome').value,
-            sexo: document.getElementById('reg-sexo').value,
-            uid: user.uid
-        });
-        location.reload();
-    }   
+    const user = firebase.auth().currentUser;
+    const username = document.getElementById('final-username').value.toLowerCase().replace('@', '').trim();
+    const bio = document.getElementById('final-bio').value;
+    
+    // Salva o link de username único
+    await database.ref(`usernames/${username}`).set(user.uid);
+    
+    // Atualiza apenas os novos campos
+    await database.ref(`users/${user.uid}/perfil`).update({
+        username: username,
+        bio: bio
+    });
+    
+    location.reload(); 
+}
         
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
 async function verPerfil(uidAlvo) {
