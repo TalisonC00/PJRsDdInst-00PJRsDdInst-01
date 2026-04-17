@@ -150,9 +150,10 @@
                 <img id="img-perfil-header" style="width:100%; height:100%; object-fit:cover; display:none;">
                 <span id="emoji-perfil-header">👤</span>
             </div>
+            
             <div style="display: flex; flex-direction: column; text-align: left;">
                 <span id="user-badge" style="font-size: 11px; font-weight: 800; color: var(--text-main);">@...</span>
-                <span id="info" style="font-size: 9px; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">0 ESTADOS</span>
+                <span id="info" style="font-size: 9px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; margin-top: 2px;">0 ESTADOS CONQUISTADOS</span>
             </div>
         </div>
 
@@ -161,7 +162,7 @@
         </button>
     </div>
     <h3 style="margin: 0; font-size: 16px; letter-spacing: -0.5px;">Ondeé 🌍</h3>
-</div>
+  </div>
 
     <div id="aba-feed" class="aba">
       <div class="card">
@@ -821,12 +822,11 @@ async function salvarViagem() {
           elFoto = document.getElementById('inp-foto'), 
           elPraia = document.getElementById('chk-praia');
 
-    // Validações básicas
     if (!userLogado) return mostrarAlerta("Você precisa estar logado.", "🔒");
     if (!elCidade.value.trim()) return mostrarAlerta("Digite o nome da cidade.", "📍");
     if (!elData.value) return mostrarAlerta("Data é obrigatória.", "📅");
 
-    // Garantia de dados do perfil (caso o objeto global não tenha carregado a tempo)
+    // Garantia dos dados do perfil antes de salvar
     if (!dadosUsuario) {
         const snap = await database.ref(`users/${userLogado.uid}/perfil`).once('value');
         dadosUsuario = snap.val();
@@ -837,17 +837,13 @@ async function salvarViagem() {
           al = parseFloat(elAlime.value) || 0, 
           at = parseFloat(elAtrac.value) || 0;
 
-    // Processamento de fotos
     const files = elFoto.files; 
     let fotos = []; 
     for (let i = 0; i < Math.min(files.length, 3); i++) { 
         fotos.push(await converter(files[i])); 
     }
 
-    // Gerar ID único para a postagem
     const tripId = database.ref().child('posts').push().key;
-
-    // Objeto da Viagem
     const trip = { 
         id: tripId,
         uid: userLogado.uid,
@@ -857,51 +853,33 @@ async function salvarViagem() {
         data: elData.value.split('-').reverse().join('/'), 
         rawDate: elData.value, 
         fotos: fotos, 
-        h: h, 
-        t: t, 
-        al: al, 
-        at: at, 
+        h: h, t: t, al: al, at: at, 
         praia: elPraia.checked, 
         total: h + t + al + at 
     };
 
-    // Objeto de atualização atômica para o Firebase
     let updates = {};
-    
-    // 1. Salva no banco privado do usuário (dentro do nó dele)
+    // Salva no seu histórico
     updates[`users/${userLogado.uid}/viagens/${elUf.value}/${tripId}`] = trip;
 
-    // 2. Se for perfil público, envia para o Feed Global da rede
+    // Se for público, manda pro feed
     if (dadosUsuario.tipo === 'publico') {
         updates[`feed_global/${tripId}`] = {
             ...trip,
-            fotoPerfil: dadosUsuario.foto || '' // Inclui a foto de perfil do autor no feed
+            fotoPerfil: dadosUsuario.foto || ''
         };
     }
 
-    // Executa as atualizações simultaneamente
     database.ref().update(updates).then(() => {
-        // Limpeza dos campos
-        elCidade.value = ""; 
-        elData.value = ""; 
-        elHosp.value = ""; 
-        elTrans.value = ""; 
-        elAlime.value = ""; 
-        elAtrac.value = ""; 
-        elFoto.value = ""; 
-        elPraia.checked = false;
-
+        // Limpa os campos
+        elCidade.value = ""; elData.value = ""; elHosp.value = ""; 
+        elTrans.value = ""; elAlime.value = ""; elAtrac.value = ""; 
+        elFoto.value = ""; elPraia.checked = false;
         mostrarAlerta("Memória salva na sua jornada!", "📌");
-        
-        // Volta para a aba do mapa automaticamente
-        const btnMapa = document.querySelectorAll('.btn-aba')[0];
-        trocarAba('mapa', btnMapa);
-    }).catch(error => {
-        console.error("Erro ao salvar:", error);
-        mostrarAlerta("Erro ao salvar memória.", "❌");
-    });
+        trocarAba('mapa', document.querySelectorAll('.btn-aba')[1]);
+    }).catch(e => mostrarAlerta("Erro ao salvar: " + e.message, "❌"));
 }
-
+        
 function removerViagem(uf, idFirebase, cidade) {
         const modal = document.getElementById('custom-confirm');
         const btnSim = document.getElementById('btn-confirmar');
@@ -1067,8 +1045,12 @@ async function pesquisarUsuarios(termo) {
         
 // --- 2. PERFIL DETALHADO E EDIÇÃO ---
 function abrirVisualizacaoPerfil() {
+    if (!dadosUsuario) return;
     const container = document.getElementById('aba-perfil-detalhado');
     
+    // Conta os estados dinamicamente do dbGlobal
+    const totalEstados = Object.keys(dbGlobal).length;
+
     container.innerHTML = `
         <div class="card" style="text-align:center; position:relative;">
             <button onclick="abrirMeuPerfilDetalhado()" style="position:absolute; top:20px; right:20px; background:none; border:none; font-size:20px; cursor:pointer;">⚙️</button>
@@ -1077,8 +1059,13 @@ function abrirVisualizacaoPerfil() {
                 ${dadosUsuario.foto ? `<img src="${dadosUsuario.foto}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="font-size:40px;">👤</span>'}
             </div>
             
-            <h2 style="margin:0; font-weight:800;">@${dadosUsuario.username}</h2>
-            <p style="margin:5px 0 15px; color:var(--text-sub); font-weight:600;">${dadosUsuario.nome}</p>
+            <h2 style="margin:0; font-weight:800; font-size:18px;">${dadosUsuario.nome || 'Viajante'}</h2>
+            
+            <p style="margin:2px 0 10px; color:var(--primary); font-weight:700; font-size:14px;">@${dadosUsuario.username}</p>
+            
+            <p style="margin:0 0 20px; font-size:10px; font-weight:800; color:var(--text-sub); text-transform:uppercase; letter-spacing:1px;">
+                ${totalEstados} ${totalEstados === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}
+            </p>
             
             <div style="background:#f8fafc; padding:15px; border-radius:20px; margin-bottom:20px; text-align:left;">
                 <span style="font-size:10px; font-weight:800; color:var(--text-sub); text-transform:uppercase;">Minha Bio</span>
