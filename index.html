@@ -86,15 +86,15 @@
 
     <div id="auth-container" style="position:fixed; top:0; left:0; width:100%; height:100%; background:var(--sky); z-index:9000; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;">
     <div class="card" id="card-auth" style="width:100%; max-width:360px; text-align:center;">
-        <h2 style="color:var(--primary); font-weight:800; margin-bottom:5px;">Ondee 🚩</h2>
-        <p style="font-size:12px; color:var(--text-sub); margin-bottom:20px;">Sua jornada pelo Brasil começa aqui.</p>
+        <h2 style="color:var(--primary); font-weight:800; margin-bottom:5px;">Ondeé 🌍</h2>
+        <p style="font-size:12px; color:var(--text-sub); margin-bottom:20px;"> É Brasil!</p>
         
         <div id="inputs-auth">
             <input type="email" id="auth-email" placeholder="E-mail" style="margin-bottom:10px;">
             <input type="password" id="auth-senha" placeholder="Senha" style="margin-bottom:10px;">
             
             <div id="campos-registro" style="display:none;">
-                <input type="text" id="reg-nome" placeholder="Nome Completo" style="margin-bottom:10px;">
+                <input type="text" id="reg-nome" placeholder="Nome" style="margin-bottom:10px;">
                 <select id="reg-sexo" style="margin-bottom:10px;">
                     <option value="" disabled selected>Sexo</option>
                     <option value="M">Masculino</option>
@@ -153,7 +153,7 @@
             </div>
             
             <div style="display: flex; flex-direction: column; text-align: left;">
-                <span id="user-real-name-header" style="font-size: 12px; font-weight: 800; color: var(--text-main); line-height: 1;">Carregando...</span>
+                <span id="user-real-name-header" style="font-size: 12px; font-weight: 800; color: var(--text-main); line-height: 1;">A Bordo</span>
                 <span id="user-badge" style="font-size: 10px; font-weight: 700; color: var(--primary); margin-top: 2px;">@...</span>
             </div>
         </div>
@@ -281,10 +281,10 @@
     </div>
 
     <nav class="menu-nav">
-    <button class="btn-aba" onclick="trocarAba('feed', this)">🌐</button>
-    <button class="btn-aba active" onclick="trocarAba('mapa', this)">🗺️</button>
-    <button class="btn-aba" onclick="trocarAba('timeline', this)">🕒</button>
-    <button class="btn-aba" onclick="trocarAba('jornada', this)">🏆</button>
+    <button class="btn-aba" onclick="trocarAba('Feed', this)">🌐</button>
+    <button class="btn-aba active" onclick="trocarAba('Mapa', this)">🗺️</button>
+    <button class="btn-aba" onclick="trocarAba('Timeline', this)">⏱</button>
+    <button class="btn-aba" onclick="trocarAba('Passaporte', this)">🏆</button>
     
     <button id="btn-nav-registro" class="btn-aba" onclick="trocarAba('registro', this)">➕</button>
     <button id="btn-nav-gastos" class="btn-aba" onclick="trocarAba('gastos', this)">💰</button>
