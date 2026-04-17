@@ -132,8 +132,7 @@
     </div>
 </div>
     
-    <div id="aba-perfil-detalhado" class="aba">
-    </div>
+    <div id="aba-perfil-detalhado" class="aba"></div>
 
     <div id="aba-notificacoes" class="aba">
       <div class="card">
@@ -143,28 +142,28 @@
         </div>
       </div>
     </div>
-    
-    <div class="header">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <div id="user-info-top" onclick="verPerfil(userLogado.uid)" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <div id="foto-perfil-min" style="width: 32px; height: 32px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--sky);">
-                <img id="img-perfil-header" src="default-avatar.png" style="width:100%; height:100%; object-fit:cover; display:none;">
-                <span id="emoji-perfil-header">👤</span>
-            </div>
-            <div style="display: flex; flex-direction: column; text-align: left;">
-                <span id="user-badge" style="font-size: 11px; font-weight: 800; color: var(--text-main);">@...</span>
-                <span id="info" style="font-size: 9px; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">0 ESTADOS</span>
-            </div>
-        </div>
 
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <button onclick="trocarAba('notificacoes', this)" style="background: none; border: none; font-size: 18px; position: relative; cursor: pointer;">
-                🔔<span id="badge-notif" style="display: none; position: absolute; top: -2px; right: -2px; background: var(--primary); color: white; font-size: 7px; border-radius: 50%; width: 14px; height: 14px; align-items: center; justify-content: center; border: 2px solid white;">0</span>
-            </button>
-            <button onclick="abrirMeuPerfilDetalhado()" style="background: none; border: none; font-size: 18px; cursor: pointer;">⚙️</button>
+    <div class="header">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div id="user-info-top" onclick="verPerfil(userLogado.uid)" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <div id="foto-perfil-min" style="width: 32px; height: 32px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--sky);">
+                    <img id="img-perfil-header" style="width:100%; height:100%; object-fit:cover; display:none;">
+                    <span id="emoji-perfil-header">👤</span>
+                    <button onclick="abrirMeuPerfilDetalhado()" style="background: none; border: none; font-size: 18px; cursor: pointer;">⚙️</button>
+                </div>
+                <div style="display: flex; flex-direction: column; text-align: left;">
+                    <span id="user-badge" style="font-size: 11px; font-weight: 800; color: var(--text-main);">@...</span>
+                    <span id="info" style="font-size: 9px; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">0 ESTADOS</span>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button onclick="trocarAba('notificacoes', this)" style="background: none; border: none; font-size: 18px; position: relative; cursor: pointer;">
+                    🔔<span id="badge-notif" style="display: none; position: absolute; top: -2px; right: -2px; background: var(--primary); color: white; font-size: 7px; border-radius: 50%; width: 14px; height: 14px; align-items: center; justify-content: center; border: 2px solid white;">0</span>
+                </button>
+            </div>
         </div>
-      </div>
-     <h3 style="margin: 0; font-size: 16px; letter-spacing: -0.5px;">Ondeé 🌍</h3>
+        <h3 style="margin: 0; font-size: 16px; letter-spacing: -0.5px;">Ondeé 🌍</h3>
     </div>
 
     <div id="aba-feed" class="aba">
@@ -1116,29 +1115,18 @@ async function atualizarFotoPreview(input) {
 
 async function salvarAlteracoesCompletas() {
     const user = userLogado.uid;
-    const novoNome = document.getElementById('edit-nome').value;
-    const novoUser = document.getElementById('edit-username').value.toLowerCase().replace('@','').trim();
-    const novoTipo = document.getElementById('edit-tipo').value;
-    const novaBio = document.getElementById('edit-bio').value;
-
     const updates = {};
-    updates[`users/${user}/perfil/nome`] = novoNome;
-    updates[`users/${user}/perfil/username`] = novoUser;
-    updates[`users/${user}/perfil/bio`] = novaBio;
-    updates[`users/${user}/perfil/tipo`] = novoTipo;
+    updates[`users/${user}/perfil/nome`] = document.getElementById('edit-nome').value;
+    updates[`users/${user}/perfil/username`] = document.getElementById('edit-username').value.toLowerCase().trim();
+    updates[`users/${user}/perfil/bio`] = document.getElementById('edit-bio').value;
+    updates[`users/${user}/perfil/tipo`] = document.getElementById('edit-tipo').value;
     if(novaFotoBase64) updates[`users/${user}/perfil/foto`] = novaFotoBase64;
-
-    // Se mudou para privado, limpa o feed global
-    if (novoTipo === 'privado') {
-        const snap = await database.ref('feed_global').orderByChild('uid').equalTo(user).once('value');
-        if(snap.exists()) Object.keys(snap.val()).forEach(id => updates[`feed_global/${id}`] = null);
-    }
 
     await database.ref().update(updates);
     mostrarAlerta("Perfil atualizado!", "✅");
-    location.reload();
+    location.reload(); // Recarrega para aplicar as mudanças de foto em todo o app
 }
-
+        
 function renderNotificacoes() {
     const lista = document.getElementById('lista-notificacoes');
     database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
@@ -1183,12 +1171,20 @@ function escutarNotificacoes() {
 // --- 4. ACEITAR AMIZADE ---
 async function aceitarAmizade(uidAmigo, notifId) {
     const updates = {};
+    // Cria o vínculo bidirecional
     updates[`users/${userLogado.uid}/seguindo/${uidAmigo}`] = true;
     updates[`users/${uidAmigo}/seguidores/${userLogado.uid}`] = true;
-    updates[`notificacoes/${userLogado.uid}/${notifId}/lida`] = true;
+    // Remove a notificação após aceitar
+    updates[`notificacoes/${userLogado.uid}/${notifId}`] = null;
     
     await database.ref().update(updates);
-    mostrarAlerta("Agora vocês são amigos!", "🤝");
+    mostrarAlerta("Amizade confirmada!", "🤝");
+    renderNotificacoes();
+}
+
+function recusarNotificacao(notifId) {
+    database.ref(`notificacoes/${userLogado.uid}/${notifId}`).remove();
+    mostrarAlerta("Solicitação removida.", "🗑️");
 }
         
 function toggleAuthMode() {
@@ -1213,10 +1209,21 @@ function initApp(perfil) {
     dadosUsuario = perfil;
     perfilEmFoco = perfil;
     
+    // Atualiza Texto
     const userBadge = document.getElementById('user-badge');
     if(userBadge) userBadge.innerText = `@${perfil.username}`;
 
-    // Escuta específica das viagens do usuário logado
+    // ATUALIZA FOTO NO HEADER
+    const imgHeader = document.getElementById('img-perfil-header');
+    const emojiHeader = document.getElementById('emoji-perfil-header');
+    
+    if (perfil.foto && imgHeader) {
+        imgHeader.src = perfil.foto;
+        imgHeader.style.display = "block";
+        if(emojiHeader) emojiHeader.style.display = "none";
+    }
+
+    // Escuta viagens
     database.ref(`users/${userLogado.uid}/viagens`).on('value', (snapshot) => {
         dbGlobal = snapshot.val() || {};
         atualizarInterface();
@@ -1226,9 +1233,9 @@ function initApp(perfil) {
         renderJornada();
     });
 
-    init(); // Carrega o SVG do mapa
+    init(); // Mapa
+    escutarNotificacoes(); // Sininho
 }
-
 // Observador de Autenticação (Ajustado)
 firebase.auth().onAuthStateChanged(async (user) => {
     if (user) {
