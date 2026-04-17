@@ -146,23 +146,25 @@
     
     <div class="header">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <div id="user-info-top" onclick="abrirMeuPerfilDetalhado()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <div id="foto-perfil-min" style="width: 30px; height: 30px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--sky);">
-                👤
+        <div id="user-info-top" onclick="verPerfil(userLogado.uid)" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <div id="foto-perfil-min" style="width: 32px; height: 32px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--sky);">
+                <img id="img-perfil-header" src="default-avatar.png" style="width:100%; height:100%; object-fit:cover; display:none;">
+                <span id="emoji-perfil-header">👤</span>
             </div>
             <div style="display: flex; flex-direction: column; text-align: left;">
-                <span id="user-badge" style="font-size: 11px; font-weight: 800; color: var(--text-main);">@carregando...</span>
+                <span id="user-badge" style="font-size: 11px; font-weight: 800; color: var(--text-main);">@...</span>
                 <span id="info" style="font-size: 9px; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">0 ESTADOS</span>
             </div>
         </div>
 
-        <button onclick="trocarAba('notificacoes', this)" style="background: none; border: none; font-size: 18px; position: relative; cursor: pointer; padding: 5px;">
-            🔔
-            <span id="badge-notif" style="display: none; position: absolute; top: 2px; right: 2px; background: var(--primary); color: white; font-size: 7px; font-weight: 800; border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid white;">0</span>
-        </button>
-    </div>
-    
-    <h3 style="margin: 0; font-size: 16px; letter-spacing: -0.5px;">Ondeé 🌍</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button onclick="trocarAba('notificacoes', this)" style="background: none; border: none; font-size: 18px; position: relative; cursor: pointer;">
+                🔔<span id="badge-notif" style="display: none; position: absolute; top: -2px; right: -2px; background: var(--primary); color: white; font-size: 7px; border-radius: 50%; width: 14px; height: 14px; align-items: center; justify-content: center; border: 2px solid white;">0</span>
+            </button>
+            <button onclick="abrirMeuPerfilDetalhado()" style="background: none; border: none; font-size: 18px; cursor: pointer;">⚙️</button>
+        </div>
+      </div>
+     <h3 style="margin: 0; font-size: 16px; letter-spacing: -0.5px;">Ondeé 🌍</h3>
     </div>
 
     <div id="aba-feed" class="aba">
@@ -1018,16 +1020,23 @@ function atualizarInterface() {
     }
 
     // --- COLOQUE ESTAS FUNÇÕES DENTRO DO SEU SCRIPT ---
-function enviarSolicitacao(uidAlvo) {
+async function enviarSolicitacao(uidAlvo, btn) {
+    if(btn.innerText === "ENVIADO") return;
+
     const ref = database.ref(`notificacoes/${uidAlvo}`).push();
-    ref.set({
+    await ref.set({
         tipo: 'amizade',
-        de: userLogado.uid,
-        username: dadosUsuario.username,
+        de_uid: userLogado.uid,
+        de_username: dadosUsuario.username,
+        de_nome: dadosUsuario.nome,
+        de_foto: dadosUsuario.foto || '',
         lida: false,
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
-    mostrarAlerta("Solicitação enviada!", "✉️");
+    
+    btn.innerText = "ENVIADO";
+    btn.style.background = "#CBD5E1";
+    mostrarAlerta("Solicitação enviada!", "📩");
 }
         
 async function pesquisarUsuarios(termo) {
@@ -1065,26 +1074,69 @@ function abrirMeuPerfilDetalhado() {
     const container = document.getElementById('aba-perfil-detalhado');
     container.innerHTML = `
         <div class="card" style="text-align:center;">
-            <div style="width:80px; height:80px; background:var(--sky); border-radius:50%; margin:0 auto 15px; display:flex; align-items:center; justify-content:center; font-size:30px; border:3px solid var(--primary);">👤</div>
-            <h2 style="margin:0;">@${dadosUsuario.username}</h2>
-            <p style="font-size:12px; color:var(--text-sub); margin-bottom:20px;">${dadosUsuario.nome}</p>
-
+            <div style="position:relative; width:85px; height:85px; margin:0 auto 15px;">
+                <div id="foto-preview-container" style="width:100%; height:100%; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border:3px solid var(--primary);">
+                    ${dadosUsuario.foto ? `<img src="${dadosUsuario.foto}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
+                </div>
+                <label for="edit-foto-input" style="position:absolute; bottom:0; right:0; background:white; border-radius:50%; width:25px; height:25px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2); cursor:pointer;">📷</label>
+                <input type="file" id="edit-foto-input" style="display:none;" accept="image/*" onchange="atualizarFotoPreview(this)">
+            </div>
+            
             <div style="text-align:left;">
+                <label>Nome Completo</label>
+                <input type="text" id="edit-nome" value="${dadosUsuario.nome || ''}" style="margin-bottom:10px;">
+                
+                <label>Username (sem @)</label>
+                <input type="text" id="edit-username" value="${dadosUsuario.username || ''}" style="margin-bottom:10px;">
+
                 <label>Sua Bio</label>
-                <textarea id="edit-bio" style="width:100%; height:70px; padding:10px; border-radius:12px; border:1.5px solid #eee; font-family:inherit; margin-bottom:15px;">${dadosUsuario.bio || ''}</textarea>
+                <textarea id="edit-bio" style="width:100%; height:60px; padding:10px; border-radius:12px; border:1.5px solid #eee; font-family:inherit; margin-bottom:10px;">${dadosUsuario.bio || ''}</textarea>
 
                 <label>Tipo de Viajante</label>
-                <select id="edit-tipo" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid #eee; margin-bottom:20px;">
+                <select id="edit-tipo" style="margin-bottom:20px;">
                     <option value="publico" ${dadosUsuario.tipo === 'publico' ? 'selected' : ''}>🌍 Viajante Brasil (Público)</option>
                     <option value="privado" ${dadosUsuario.tipo === 'privado' ? 'selected' : ''}>🔒 Viajante Local (Privado)</option>
                 </select>
             </div>
 
-            <button onclick="atualizarConfiguracoesPerfil()" class="btn-acao" style="background:var(--money); margin-bottom:10px;">Salvar Alterações</button>
-            <button onclick="firebase.auth().signOut().then(() => location.reload())" style="background:#f1f5f9; color:var(--primary); border:none; padding:12px; border-radius:15px; width:100%; font-weight:800; cursor:pointer;">SAIR DA CONTA</button>
+            <button onclick="salvarAlteracoesCompletas()" class="btn-acao" style="background:var(--money);">SALVAR ALTERAÇÕES</button>
+            <button onclick="firebase.auth().signOut().then(() => location.reload())" style="background:none; color:var(--primary); font-weight:800; margin-top:15px; border:none; cursor:pointer;">SAIR DA CONTA</button>
         </div>
     `;
     trocarAba('perfil-detalhado', null);
+}
+// --- 3. LÓGICA DE SALVAMENTO ---
+let novaFotoBase64 = null;
+async function atualizarFotoPreview(input) {
+    if (input.files && input.files[0]) {
+        novaFotoBase64 = await converter(input.files[0]);
+        document.getElementById('foto-preview-container').innerHTML = `<img src="${novaFotoBase64}" style="width:100%; height:100%; object-fit:cover;">`;
+    }
+}
+
+async function salvarAlteracoesCompletas() {
+    const user = userLogado.uid;
+    const novoNome = document.getElementById('edit-nome').value;
+    const novoUser = document.getElementById('edit-username').value.toLowerCase().replace('@','').trim();
+    const novoTipo = document.getElementById('edit-tipo').value;
+    const novaBio = document.getElementById('edit-bio').value;
+
+    const updates = {};
+    updates[`users/${user}/perfil/nome`] = novoNome;
+    updates[`users/${user}/perfil/username`] = novoUser;
+    updates[`users/${user}/perfil/bio`] = novaBio;
+    updates[`users/${user}/perfil/tipo`] = novoTipo;
+    if(novaFotoBase64) updates[`users/${user}/perfil/foto`] = novaFotoBase64;
+
+    // Se mudou para privado, limpa o feed global
+    if (novoTipo === 'privado') {
+        const snap = await database.ref('feed_global').orderByChild('uid').equalTo(user).once('value');
+        if(snap.exists()) Object.keys(snap.val()).forEach(id => updates[`feed_global/${id}`] = null);
+    }
+
+    await database.ref().update(updates);
+    mostrarAlerta("Perfil atualizado!", "✅");
+    location.reload();
 }
 
 function renderNotificacoes() {
@@ -1097,12 +1149,17 @@ function renderNotificacoes() {
         Object.keys(data).reverse().forEach(id => {
             const n = data[id];
             const item = document.createElement('div');
-            item.style = `padding:15px; border-radius:15px; background:${n.lida ? '#fff' : '#f0f9ff'}; margin-bottom:10px; border:1px solid #e2e8f0;`;
+            item.style = `padding:15px; border-radius:20px; background:white; margin-bottom:12px; border:1px solid #eee; display:flex; gap:12px; align-items:center;`;
             item.innerHTML = `
-                <div style="font-size:13px; margin-bottom:8px;"><b>@${n.de_username}</b> enviou uma solicitação de amizade.</div>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="aceitarAmizade('${n.de_uid}', '${id}')" style="background:var(--money); color:white; border:none; padding:8px 15px; border-radius:10px; font-size:11px; font-weight:800;">ACEITAR</button>
-                    <button onclick="database.ref('notificacoes/${userLogado.uid}/${id}').remove()" style="background:#f1f5f9; color:var(--text-sub); border:none; padding:8px 15px; border-radius:10px; font-size:11px; font-weight:800;">RECUSAR</button>
+                <div style="width:45px; height:45px; border-radius:50%; background:#f1f5f9; overflow:hidden; flex-shrink:0;">
+                    ${n.de_foto ? `<img src="${n.de_foto}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="font-size:20px; display:flex; justify-content:center; align-items:center; height:100%;">👤</span>'}
+                </div>
+                <div style="flex:1;">
+                    <div style="font-size:13px; line-height:1.2;"><b>${n.de_nome || 'Viajante'}</b><br><span style="color:var(--text-sub);">@${n.de_username || 'anonimo'}</span></div>
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                        <button onclick="aceitarAmizade('${n.de_uid}', '${id}')" style="background:#10B981; color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">ACEITAR</button>
+                        <button onclick="database.ref('notificacoes/${userLogado.uid}/${id}').remove()" style="background:#FF4B5C; color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">RECUSAR</button>
+                    </div>
                 </div>
             `;
             lista.appendChild(item);
