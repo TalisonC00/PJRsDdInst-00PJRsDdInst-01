@@ -1339,22 +1339,39 @@ function renderNotificacoes() {
 }
 
 // --- 4. ACEITAR AMIZADE ---
+// --- ACEITAR AMIZADE ---
 async function aceitarAmizade(uidAmigo, notifId) {
     const updates = {};
-    // Cria o vínculo bidirecional
-    updates[`users/${userLogado.uid}/seguindo/${uidAmigo}`] = true;
-    updates[`users/${uidAmigo}/seguidores/${userLogado.uid}`] = true;
-    // Remove a notificação após aceitar
-    updates[`notificacoes/${userLogado.uid}/${notifId}`] = null;
-    
-    await database.ref().update(updates);
-    mostrarAlerta("Amizade confirmada!", "🤝");
-    renderNotificacoes();
+    const meuUid = userLogado.uid;
+
+    // 1. Cria o vínculo bidirecional (Seguindo e Seguidores)
+    updates[`users/${meuUid}/seguindo/${uidAmigo}`] = true;
+    updates[`users/${uidAmigo}/seguidores/${meuUid}`] = true;
+
+    // 2. Limpa a notificação (Deleta o registro do banco)
+    updates[`notificacoes/${meuUid}/${notifId}`] = null;
+
+    try {
+        await database.ref().update(updates);
+        mostrarAlerta("Agora vocês são amigos!", "🤝");
+        
+        // 3. Limpeza de UI: Força a atualização da lista se estiver aberta
+        renderNotificacoes(); 
+    } catch (e) {
+        console.error("Erro ao aceitar amizade:", e);
+        mostrarAlerta("Erro ao processar solicitação.", "❌");
+    }
 }
 
-function recusarNotificacao(notifId) {
-    database.ref(`notificacoes/${userLogado.uid}/${notifId}`).remove();
-    mostrarAlerta("Solicitação removida.", "🗑️");
+// --- RECUSAR / LIMPAR NOTIFICAÇÃO ---
+async function recusarNotificacao(notifId) {
+    try {
+        // Remove apenas do banco; o listener .on('value') cuidará do resto na tela
+        await database.ref(`notificacoes/${userLogado.uid}/${notifId}`).remove();
+        mostrarAlerta("Solicitação removida.", "🗑️");
+    } catch (e) {
+        console.error("Erro ao remover notificação:", e);
+    }
 }
         
 function toggleAuthMode() {
