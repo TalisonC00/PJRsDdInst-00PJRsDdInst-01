@@ -426,7 +426,43 @@ async function verPerfil(uidAlvo) {
     const botoesNav = document.querySelectorAll('.btn-aba');
     trocarAba('mapa', botoesNav[1]); 
 }
-        
+
+async function atualizarConfiguracoesPerfil() {
+    const novoTipo = document.getElementById('edit-tipo').value;
+    const user = userLogado.uid;
+    const updates = {};
+
+    updates[`users/${user}/perfil/tipo`] = novoTipo;
+
+    if (novoTipo === 'privado') {
+        // Remove apenas do "Mural Público", mas mantém no seu perfil para os amigos verem
+        const snapFeed = await database.ref('feed_global').orderByChild('uid').equalTo(user).once('value');
+        if (snapFeed.exists()) {
+            Object.keys(snapFeed.val()).forEach(postId => {
+                updates[`feed_global/${postId}`] = null; // Tira da vitrine pública
+            });
+        }
+    } else {
+        // Se mudar para público, precisamos "devolver" as viagens para a vitrine pública
+        const snapMinhasViagens = await database.ref(`users/${user}/viagens`).once('value');
+        if (snapMinhasViagens.exists()) {
+            const ufs = snapMinhasViagens.val();
+            for (let uf in ufs) {
+                for (let id in ufs[uf]) {
+                    updates[`feed_global/${id}`] = {
+                        ...ufs[uf][id],
+                        username: dadosUsuario.username,
+                        fotoPerfil: dadosUsuario.foto || ''
+                    };
+                }
+            }
+        }
+    }
+
+    await database.ref().update(updates);
+    mostrarAlerta("Privacidade atualizada!", "🔐");
+}
+
 function mostrarAlerta(msg, icon = '💡') {
         document.getElementById('alert-msg').innerText = msg;
         document.getElementById('alert-icon').innerText = icon;
@@ -746,16 +782,6 @@ function renderJornada() {
         document.getElementById('grid-conquistas').innerHTML = html;
     }
 
-function trocarAba(id, btn) {
-        document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
-        document.querySelectorAll('.btn-aba').forEach(b => b.classList.remove('active'));
-        document.getElementById('aba-' + id).classList.add('ativa');
-        btn.classList.add('active');
-        if(id === 'gastos') renderGastos();
-        if(id === 'jornada') renderJornada();
-        if(id === 'timeline') renderTimeline();
-    }
-
 async function salvarViagem() {
     const elUf = document.getElementById('sel-uf'), 
           elCidade = document.getElementById('txt-cidade'), 
@@ -962,7 +988,54 @@ function atualizarInterface() {
     }
 
     // --- COLOQUE ESTAS FUNÇÕES DENTRO DO SEU SCRIPT ---
-
+function enviarSolicitacao(uidAlvo) {
+    const ref = database.ref(`notificacoes/${uidAlvo}`).push();
+    ref.set({
+        tipo: 'amizade',
+        de: userLogado.uid,
+        username: dadosUsuario.username,
+        lida: false,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+    mostrarAlerta("Solicitação enviada!", "✉️");
+}
+        
+async function pesquisarUsuarios(termo) {
+    if (termo.length < 3) return;
+    const listaBusca = document.getElementById('resultado-busca');
+    
+    // Busca por username (indexado no nó usernames que já criamos)
+    database.ref('users').orderByChild('username').startAt(termo).endAt(termo + '\uf8ff').limitToFirst(5).on('value', snap => {
+        const users = snap.val();
+        listaBusca.innerHTML = '';
+        for (let uid in users) {
+            const u = users[uid].perfil;
+            listaBusca.innerHTML += `
+                <div class="card" style="display:flex; align-items:center; justify-content:space-between; padding:10px;">
+                    <div onclick="verPerfil('${uid}')" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+                        <img src="${u.foto || 'default.jpg'}" style="width:30px; height:30px; border-radius:50%;">
+                        <div><b>@${u.username}</b><br><small>${u.nome}</small></div>
+                    </div>
+                    <button onclick="enviarSolicitacao('${uid}')" class="pill" style="background:var(--primary); color:white; border:none;">Adicionar</button>
+                </div>`;
+        }
+    });
+}
+        
+function escutarNotificacoes() {
+    database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
+        const notifs = snap.val();
+        const badge = document.getElementById('badge-notif');
+        if (notifs) {
+            const naoLidas = Object.values(notifs).filter(n => !n.lida).length;
+            if (naoLidas > 0) {
+                badge.innerText = naoLidas;
+                badge.style.display = 'block';
+            }
+        }
+    });
+}
+        
 function toggleAuthMode() {
     modoRegistro = !modoRegistro;
     const btn = document.getElementById('btn-auth-principal');
