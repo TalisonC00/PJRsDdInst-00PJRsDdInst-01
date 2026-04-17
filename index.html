@@ -133,18 +133,36 @@
 </div>
 
     <div class="header">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-        <span id="user-badge" style="font-size: 10px; font-weight: 800; background: #f1f5f9; padding: 4px 8px; border-radius: 10px; color: var(--text-sub);">@...</span>
-        <button onclick="firebase.auth().signOut().then(() => location.reload())" style="background:none; border:none; font-size:10px; color:var(--primary); font-weight:bold;">SAIR</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div id="user-info-top" onclick="abrirMeuPerfilDetalhado()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <div id="foto-perfil-min" style="width: 30px; height: 30px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--sky);">
+                👤
+            </div>
+            <div style="display: flex; flex-direction: column; text-align: left;">
+                <span id="user-badge" style="font-size: 11px; font-weight: 800; color: var(--text-main);">@carregando...</span>
+                <span id="info" style="font-size: 9px; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">0 ESTADOS</span>
+            </div>
+        </div>
+
+        <button onclick="trocarAba('notificacoes', this)" style="background: none; border: none; font-size: 18px; position: relative; cursor: pointer; padding: 5px;">
+            🔔
+            <span id="badge-notif" style="display: none; position: absolute; top: 2px; right: 2px; background: var(--primary); color: white; font-size: 7px; font-weight: 800; border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid white;">0</span>
+        </button>
     </div>
-    <h3>Ondee 🌍</h3>
-    <span id="info">ESTADOS CONQUISTADOS: 0</span>
-</div>
+    
+    <h3 style="margin: 0; font-size: 16px; letter-spacing: -0.5px;">Ondeé 🌍</h3>
+    </div>
 
     <div id="aba-feed" class="aba">
       <div class="card">
-        <h3 style="color: var(--primary); display: flex; align-items: center; gap: 8px;">🌐 Viajantes Brasil</h3>
-        <p style="font-size: 11px; color: var(--text-sub); margin-bottom: 20px;">Explore as memórias públicas da rede.</p>
+        <div class="search-container" style="margin-bottom: 20px;">
+            <input type="text" id="input-busca" placeholder="🔍 Buscar viajantes" 
+                   oninput="pesquisarUsuarios(this.value)" 
+                   style="width:100%; padding:12px; border-radius:10px; border:1px solid #e2e8f0; font-size:14px;">
+            <div id="resultado-busca" style="margin-top:10px;"></div>
+        </div>
+
+        <h4 style="color: var(--primary); display: flex; align-items: center; gap: 5px;">🌐 Viajantes</h4>
         <div id="feed-list"></div>
       </div>
     </div>
