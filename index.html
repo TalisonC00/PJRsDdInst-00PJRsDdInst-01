@@ -131,7 +131,19 @@
         <button class="btn-acao" id="btn-salvar-final" onclick="salvarPerfilFinal()" disabled>Finalizar Cadastro</button>
     </div>
 </div>
+    
+    <div id="aba-perfil-detalhado" class="aba">
+    </div>
 
+    <div id="aba-notificacoes" class="aba">
+      <div class="card">
+        <h3 style="color: var(--primary); display: flex; align-items: center; gap: 10px;">🔔 Notificações</h3>
+        <div id="lista-notificacoes">
+            <p style="text-align:center; color:var(--text-sub); font-size:12px; padding:20px;">Carregando...</p>
+        </div>
+      </div>
+    </div>
+    
     <div class="header">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <div id="user-info-top" onclick="abrirMeuPerfilDetalhado()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -582,14 +594,14 @@ async function renderFeed() {
 // 3. Atualização da função trocarAba
 function trocarAba(id, btn) {
     document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
-    document.querySelectorAll('.btn-aba').forEach(b => b.classList.remove('active'));
-    document.getElementById('aba-' + id).classList.add('ativa');
-    btn.classList.add('active');
+    const bts = document.querySelectorAll('.btn-aba');
+    bts.forEach(b => b.classList.remove('active'));
     
-    if(id === 'gastos') renderGastos();
-    if(id === 'jornada') renderJornada();
-    if(id === 'timeline') renderTimeline();
-    if(id === 'feed') renderFeed(); // Chamada para a nova função
+    document.getElementById('aba-' + id).classList.add('ativa');
+    if(btn) btn.classList.add('active');
+
+    if(id === 'feed') renderFeed();
+    if(id === 'notificacoes') { renderNotificacoes(); database.ref(`notificacoes/${userLogado.uid}`).update({lida: true}); }
 }
 
 // ESTA FUNÇÃO VAI NO BOTÃO "UHUL!" DO SEU HTML
@@ -1019,39 +1031,107 @@ function enviarSolicitacao(uidAlvo) {
 }
         
 async function pesquisarUsuarios(termo) {
-    if (termo.length < 3) return;
     const listaBusca = document.getElementById('resultado-busca');
-    
-    // Busca por username (indexado no nó usernames que já criamos)
-    database.ref('users').orderByChild('username').startAt(termo).endAt(termo + '\uf8ff').limitToFirst(5).on('value', snap => {
+    const query = termo.toLowerCase().trim();
+    if (query.length < 3) { listaBusca.innerHTML = ''; return; }
+
+    database.ref('users').orderByChild('perfil/username').startAt(query).endAt(query + '\uf8ff').limitToFirst(5).once('value', snap => {
         const users = snap.val();
         listaBusca.innerHTML = '';
+        if (!users) { listaBusca.innerHTML = '<p style="font-size:11px; color:red; padding:10px;">Nenhum viajante encontrado.</p>'; return; }
+
         for (let uid in users) {
+            if (uid === userLogado.uid) continue;
             const u = users[uid].perfil;
-            listaBusca.innerHTML += `
-                <div class="card" style="display:flex; align-items:center; justify-content:space-between; padding:10px;">
-                    <div onclick="verPerfil('${uid}')" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
-                        <img src="${u.foto || 'default.jpg'}" style="width:30px; height:30px; border-radius:50%;">
-                        <div><b>@${u.username}</b><br><small>${u.nome}</small></div>
+            const item = document.createElement('div');
+            item.style = "display:flex; align-items:center; justify-content:space-between; padding:12px; background:#f8fafc; border-radius:12px; margin-bottom:8px; border:1px solid #edf2f7;";
+            item.innerHTML = `
+                <div onclick="verPerfil('${uid}')" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+                    <div style="width:30px; height:30px; background:var(--sky); border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>
+                    <div>
+                        <b style="font-size:13px; display:block;">@${u.username}</b>
+                        <small style="color:var(--text-sub); font-size:10px;">${u.tipo === 'publico' ? '🌍 Brasil' : '👥 Local'}</small>
                     </div>
-                    <button onclick="enviarSolicitacao('${uid}')" class="pill" style="background:var(--primary); color:white; border:none;">Adicionar</button>
-                </div>`;
+                </div>
+                <button onclick="enviarSolicitacao('${uid}')" style="background:var(--primary); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">ADICIONAR</button>
+            `;
+            listaBusca.appendChild(item);
         }
     });
 }
         
+// --- 2. PERFIL DETALHADO E EDIÇÃO ---
+function abrirMeuPerfilDetalhado() {
+    const container = document.getElementById('aba-perfil-detalhado');
+    container.innerHTML = `
+        <div class="card" style="text-align:center;">
+            <div style="width:80px; height:80px; background:var(--sky); border-radius:50%; margin:0 auto 15px; display:flex; align-items:center; justify-content:center; font-size:30px; border:3px solid var(--primary);">👤</div>
+            <h2 style="margin:0;">@${dadosUsuario.username}</h2>
+            <p style="font-size:12px; color:var(--text-sub); margin-bottom:20px;">${dadosUsuario.nome}</p>
+
+            <div style="text-align:left;">
+                <label>Sua Bio</label>
+                <textarea id="edit-bio" style="width:100%; height:70px; padding:10px; border-radius:12px; border:1.5px solid #eee; font-family:inherit; margin-bottom:15px;">${dadosUsuario.bio || ''}</textarea>
+
+                <label>Tipo de Viajante</label>
+                <select id="edit-tipo" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid #eee; margin-bottom:20px;">
+                    <option value="publico" ${dadosUsuario.tipo === 'publico' ? 'selected' : ''}>🌍 Viajante Brasil (Público)</option>
+                    <option value="privado" ${dadosUsuario.tipo === 'privado' ? 'selected' : ''}>🔒 Viajante Local (Privado)</option>
+                </select>
+            </div>
+
+            <button onclick="atualizarConfiguracoesPerfil()" class="btn-acao" style="background:var(--money); margin-bottom:10px;">Salvar Alterações</button>
+            <button onclick="firebase.auth().signOut().then(() => location.reload())" style="background:#f1f5f9; color:var(--primary); border:none; padding:12px; border-radius:15px; width:100%; font-weight:800; cursor:pointer;">SAIR DA CONTA</button>
+        </div>
+    `;
+    trocarAba('perfil-detalhado', null);
+}
+
+function renderNotificacoes() {
+    const lista = document.getElementById('lista-notificacoes');
+    database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
+        const data = snap.val();
+        lista.innerHTML = '';
+        if (!data) { lista.innerHTML = '<p style="text-align:center; font-size:12px; padding:20px;">Nada por aqui.</p>'; return; }
+
+        Object.keys(data).reverse().forEach(id => {
+            const n = data[id];
+            const item = document.createElement('div');
+            item.style = `padding:15px; border-radius:15px; background:${n.lida ? '#fff' : '#f0f9ff'}; margin-bottom:10px; border:1px solid #e2e8f0;`;
+            item.innerHTML = `
+                <div style="font-size:13px; margin-bottom:8px;"><b>@${n.de_username}</b> enviou uma solicitação de amizade.</div>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="aceitarAmizade('${n.de_uid}', '${id}')" style="background:var(--money); color:white; border:none; padding:8px 15px; border-radius:10px; font-size:11px; font-weight:800;">ACEITAR</button>
+                    <button onclick="database.ref('notificacoes/${userLogado.uid}/${id}').remove()" style="background:#f1f5f9; color:var(--text-sub); border:none; padding:8px 15px; border-radius:10px; font-size:11px; font-weight:800;">RECUSAR</button>
+                </div>
+            `;
+            lista.appendChild(item);
+        });
+    });
+}
+
+// Chame esta função dentro do initApp para o sininho brilhar
 function escutarNotificacoes() {
     database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
         const notifs = snap.val();
         const badge = document.getElementById('badge-notif');
         if (notifs) {
-            const naoLidas = Object.values(notifs).filter(n => !n.lida).length;
-            if (naoLidas > 0) {
-                badge.innerText = naoLidas;
-                badge.style.display = 'block';
-            }
+            const count = Object.values(notifs).filter(n => !n.lida).length;
+            if (count > 0) { badge.innerText = count; badge.style.display = 'flex'; }
+            else { badge.style.display = 'none'; }
         }
     });
+}
+
+// --- 4. ACEITAR AMIZADE ---
+async function aceitarAmizade(uidAmigo, notifId) {
+    const updates = {};
+    updates[`users/${userLogado.uid}/seguindo/${uidAmigo}`] = true;
+    updates[`users/${uidAmigo}/seguidores/${userLogado.uid}`] = true;
+    updates[`notificacoes/${userLogado.uid}/${notifId}/lida`] = true;
+    
+    await database.ref().update(updates);
+    mostrarAlerta("Agora vocês são amigos!", "🤝");
 }
         
 function toggleAuthMode() {
