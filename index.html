@@ -1007,12 +1007,9 @@ function hTM_Feed(e, idF, len) { 
 }
         
 // --- CURTIR COM NOTIFICAÇÃO EM TEMPO REAL ---
+// --- SISTEMA DE CURTIDAS COM EMOJIS (❤️🔥✈️🧳) ---
 async function curtirPost(postId) {
     const uid = userLogado.uid;
-    const postRef = database.ref(`feedPublico/${postId}`);
-    const snapPost = await postRef.once('value');
-    const dadosPost = snapPost.val();
-    
     const refLike = database.ref(`interacoes/${postId}/curtidas/${uid}`);
     const snapLike = await refLike.once('value');
 
@@ -1022,95 +1019,64 @@ async function curtirPost(postId) {
         const emojis = ['❤️', '🔥', '✈️', '🧳'];
         const emojiSorteado = emojis[Math.floor(Math.random() * emojis.length)];
         
-        refLike.set({ emoji: emojiSorteado });
+        await refLike.set({ 
+            emoji: emojiSorteado,
+            username: dadosUsuario.username,
+            timestamp: firebase.database.ServerValue.TIMESTAMP 
+        });
 
-        // Envia notificação para o dono do post (se não for você mesmo)
-        if (dadosPost.uid !== uid) {
-            database.ref(`notificacoes/${dadosPost.uid}`).push().set({
-                tipo: 'curtida',
-                quem: dadosUsuario.username,
-                emoji: emojiSorteado,
-                lido: false,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
+        // Disparar Notificação para o dono do post
+        enviarNotificacao(postId, 'curtida', emojiSorteado);
     }
 }
-// --- POP-UP DE COMENTÁRIOS (NOVO) ---
-function abrirPopUpComentarios(postId) {
-    const refComentarios = database.ref(`interacoes/${postId}/comentarios`);
-    
-    // Mostra o Pop-up genérico e o overlay
-    document.getElementById('popup-overlay').style.display = 'block';
-    const popup = document.getElementById('photo-popup');
-    popup.classList.add('show');
-    
-    const content = document.getElementById('popup-content');
-    content.innerHTML = '<p style="text-align:center; font-size:12px; padding:20px;">Carregando comentários...</p>';
 
-    // Listener para carregar a lista em tempo real
-    refComentarios.on('value', snap => {
-        const comentarios = snap.val();
-        
-        content.innerHTML = `
-            <h3 style="color:var(--primary); margin: 0 0 15px 10px; font-size:18px;">💬 Comentários</h3>
-            <div id="lista-comentarios-popup" style="margin-bottom:20px; max-height:350px; overflow-y:auto;">
-                ${!comentarios ? '<p style="text-align:center; font-size:12px; color:var(--text-sub); padding:20px;">Seja o primeiro a comentar! ✨</p>' : ''}
-            </div>
-            
-            <div style="display:flex; gap:10px; padding:10px; background:#f8fafc; border-radius:15px; position:sticky; bottom:0; left:0; width:100%; box-sizing:border-box;">
-                <input type="text" id="input-coment-popup" placeholder="Escreva algo..." 
-                       style="flex:1; padding:10px; font-size:12px; border-radius:10px; border:1px solid #eee;">
-                <button onclick="enviarComentarioPopup('${postId}')" 
-                        style="background:var(--primary); color:white; border:none; padding:0 15px; border-radius:10px; font-size:13px; font-weight:800;">ENVIAR</button>
-            </div>
-        `;
-        
-        if (comentarios) {
-            const lista = document.getElementById('lista-comentarios-popup');
-            Object.values(comentarios).reverse().forEach(c => {
-                const item = document.createElement('div');
-                item.style = `padding:10px; border-bottom:1px solid #f1f5f9; display:flex; gap:10px; align-items:flex-start;`;
-                item.innerHTML = `
-                    <div style="width:30px; height:30px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0;">👤</div>
-                    <div>
-                        <b style="font-size:12px; color:var(--text-main);">@${c.username}</b>
-                        <p style="margin:2px 0; font-size:12px; color:var(--text-main);">${c.texto}</p>
-                    </div>
-                `;
-                lista.appendChild(item);
-            });
-        }
-    });
-}
-// --- COMENTAR COM NOTIFICAÇÃO EM TEMPO REAL ---
+// --- POP-UP E ENVIO DE COMENTÁRIOS ---
 function enviarComentarioPopup(postId) {
     const input = document.getElementById('input-coment-popup');
     const texto = input.value.trim();
     if (!texto) return;
 
-    const refComent = database.ref(`interacoes/${postId}/comentarios`).push();
-    refComent.set({
+    database.ref(`interacoes/${postId}/comentarios`).push().set({
         uid: userLogado.uid,
         username: dadosUsuario.username,
         texto: texto,
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
 
-    // Notificar o dono do post
-    database.ref(`feedPublico/${postId}`).once('value', snap => {
-        const p = snap.val();
-        if (p.uid !== userLogado.uid) {
-            database.ref(`notificacoes/${p.uid}`).push().set({
-                tipo: 'comentario',
-                quem: dadosUsuario.username,
-                texto: texto,
-                lido: false,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
+    enviarNotificacao(postId, 'comentario', texto);
+    input.value = '';
+}
+
+// --- LÓGICA DE NOTIFICAÇÕES (O "MOTOR" DO SININHO) ---
+async function enviarNotificacao(postId, tipo, conteudo) {
+    const snapPost = await database.ref(`feedPublico/${postId}`).once('value');
+    const post = snapPost.val();
+
+    if (post && post.uid !== userLogado.uid) {
+        database.ref(`notificacoes/${post.uid}`).push().set({
+            tipo: tipo,
+            quem: dadosUsuario.username,
+            conteudo: conteudo, // emoji ou texto do comentário
+            lido: false,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+}
+
+function escutarNotificacoes() {
+    const badge = document.getElementById('badge-notif');
+    if (!badge) return;
+
+    database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
+        const notifs = snap.val();
+        if (notifs) {
+            const naoLidas = Object.values(notifs).filter(n => !n.lido).length;
+            badge.innerText = naoLidas;
+            badge.style.display = naoLidas > 0 ? 'flex' : 'none';
+        } else {
+            badge.style.display = 'none';
         }
     });
-    input.value = '';
 }
         
 let sX = 0; function hTS(e) { sX = e.touches[0].clientX; }
@@ -1316,56 +1282,62 @@ function renderNotificacoes() {
     
     database.ref(`notificacoes/${userLogado.uid}`).orderByChild('timestamp').limitToLast(20).on('value', snap => {
         const lista = snap.val();
-        container.innerHTML = '<h2 style="padding:20px 0 10px 20px;">Notificações</h2>';
+        container.innerHTML = '<h3 style="color:var(--primary); padding:20px 0 10px 20px;">🔔 Notificações</h3>';
         
         if (!lista) {
-            container.innerHTML += '<p style="text-align:center; color:var(--text-sub); margin-top:50px;">Nenhuma novidade por aqui. 🌍</p>';
+            container.innerHTML += '<p style="text-align:center; color:var(--text-sub); margin-top:50px; font-size:12px;">Nenhuma novidade por aqui. 🌍</p>';
             return;
         }
 
         Object.keys(lista).reverse().forEach(id => {
             const n = lista[id];
             const item = document.createElement('div');
-            item.className = 'notif-item';
-            item.style = `padding: 15px; margin: 10px 15px; border-radius: 12px; background: ${n.lido ? '#fff' : '#f0f7ff'}; border-left: 4px solid ${n.lido ? '#eee' : 'var(--primary)'}; display:flex; gap:12px; align-items:center;`;
             
-            const texto = n.tipo === 'curtida' 
-                ? `<b>@${n.quem}</b> reagiu à sua viagem com ${n.emoji}`
-                : `<b>@${n.quem}</b> comentou: "${n.texto}"`;
+            // Estilo dinâmico: azul claro se não lida, branco se lida
+            item.style = `padding: 15px; margin: 0 16px 12px; border-radius: 20px; background: ${n.lido ? '#fff' : '#f0f9ff'}; border: 1px solid ${n.lido ? '#eee' : 'var(--sky)'}; display:flex; gap:12px; align-items:center; transition: 0.3s; cursor: pointer;`;
+
+            // Lógica de ícone e texto por tipo
+            let icone = '✨';
+            let msg = '';
+            let acoesHtml = '';
+
+            if (n.tipo === 'amizade') {
+                icone = '🤝';
+                msg = `<b>@${n.quem || n.de_username}</b> enviou uma solicitação de amizade.`;
+                acoesHtml = `
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button onclick="aceitarAmizade('${n.de_uid}', '${id}')" style="background:var(--money); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800;">ACEITAR</button>
+                        <button onclick="recusarNotificacao('${id}')" style="background:#fee2e2; color:#ef4444; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800;">RECUSAR</button>
+                    </div>`;
+            } else if (n.tipo === 'curtida') {
+                icone = n.conteudo || '❤️';
+                msg = `<b>@${n.quem}</b> reagiu à sua viagem.`;
+            } else if (n.tipo === 'comentario') {
+                icone = '💬';
+                msg = `<b>@${n.quem}</b> comentou: "${n.conteudo}"`;
+            }
 
             item.innerHTML = `
-                <div style="font-size:20px;">${n.tipo === 'curtida' ? '✨' : '💬'}</div>
-                <div style="font-size:12px; color:var(--text-main); flex:1;">${texto}</div>
+                <div style="font-size:20px; width:40px; height:40px; background:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.05);">${icone}</div>
+                <div style="flex:1;">
+                    <div style="font-size:12px; color:var(--text-main); line-height:1.4;">${msg}</div>
+                    ${acoesHtml}
+                </div>
             `;
             
-            // Marcar como lida ao clicar
-            item.onclick = () => database.ref(`notificacoes/${userLogado.uid}/${id}`).update({ lido: true });
+            // Ao clicar em qualquer notificação, marca como lida
+            item.onclick = (e) => {
+                // Se clicar nos botões de aceitar/recusar, não dispara este clique
+                if(e.target.tagName !== 'BUTTON') {
+                    database.ref(`notificacoes/${userLogado.uid}/${id}`).update({ lido: true });
+                }
+            };
             
             container.appendChild(item);
         });
     });
 }
 
-// Chame esta função dentro do initApp para o sininho brilhar
-function escutarNotificacoes() {
-    const badge = document.getElementById('badge-notif');
-    
-    database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
-        const notifs = snap.val();
-        if (notifs) {
-            // Conta apenas as não lidas
-            const naoLidas = Object.values(notifs).filter(n => !n.lido).length;
-            if (naoLidas > 0) {
-                badge.innerText = naoLidas;
-                badge.style.display = 'flex';
-            } else {
-                badge.style.display = 'none';
-            }
-        } else {
-            badge.style.display = 'none';
-        }
-    });
-}
 // --- 4. ACEITAR AMIZADE ---
 async function aceitarAmizade(uidAmigo, notifId) {
     const updates = {};
@@ -1404,57 +1376,58 @@ function toggleAuthMode() {
 
 // Inicialização correta do App
 function initApp(perfil) {
+    // 1. Definição de variáveis de estado global
     dadosUsuario = perfil;
-    perfilEmFoco = perfil;
+    perfilEmFoco = perfil; // No início, o foco é o próprio usuário
     
-    // Atualiza Texto
-    const userBadge = document.getElementById('user-badge');
-    if(userBadge) userBadge.innerText = `@${perfil.username}`;
+    // 2. Atualização da Identidade no Header (Invertido: Nome em cima, @ embaixo)
+    const elBadge = document.getElementById('user-badge');
+    const elRealName = document.getElementById('user-real-name-header');
+    const elImg = document.getElementById('img-perfil-header');
+    const elEmoji = document.getElementById('emoji-perfil-header');
 
-    // ATUALIZA FOTO NO HEADER
-    const imgHeader = document.getElementById('img-perfil-header');
-    const emojiHeader = document.getElementById('emoji-perfil-header');
-    
-    if (perfil.foto && imgHeader) {
-        imgHeader.src = perfil.foto;
-        imgHeader.style.display = "block";
-        if(emojiHeader) emojiHeader.style.display = "none";
+    if(elRealName) elRealName.innerText = perfil.nome || "Viajante";
+    if(elBadge) elBadge.innerText = `@${perfil.username}`;
+
+    // 3. Atualização da Foto de Perfil no Header
+    if (perfil.foto && elImg) {
+        elImg.src = perfil.foto;
+        elImg.style.display = "block";
+        if(elEmoji) elEmoji.style.display = "none";
+    } else if (elEmoji) {
+        if(elImg) elImg.style.display = "none";
+        elEmoji.style.display = "block";
     }
 
-    // Escuta viagens
+    // 4. Ativação dos "Escutadores" (Listeners) em Tempo Real
+    
+    // Escuta Notificações (Sininho: Curtidas, Comentários e Amizades)
+    escutarNotificacoes(); 
+
+    // Escuta Viagens (Atualiza Mapa, Timeline, Gastos e Conquistas automaticamente)
     database.ref(`users/${userLogado.uid}/viagens`).on('value', (snapshot) => {
         dbGlobal = snapshot.val() || {};
-        atualizarInterface();
+        
+        // Atualiza a interface macro
+        atualizarInterface(); 
+        
+        // Atualiza o contador de estados no Header (Linha abaixo do nome da rede)
+        const elInfo = document.getElementById('info');
+        if (elInfo) {
+            const total = Object.keys(dbGlobal).length;
+            elInfo.innerText = `${total} ${total === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}`;
+        }
+
+        // Renderiza os componentes visuais
         verificarNovasConquistas(); 
         renderTimeline();
         renderGastos();
         renderJornada();
     });
 
-    init(); // Mapa
-    escutarNotificacoes(); // Sininho
+    // 5. Inicialização do Mapa SVG
+    init(); 
 }
-// Observador de Autenticação (Ajustado)
-firebase.auth().onAuthStateChanged(async (user) => {
-    if (user) {
-        userLogado = user;
-        const snap = await database.ref(`users/${user.uid}/perfil`).once('value');
-        const perfil = snap.val();
-
-        if (!perfil || !perfil.username) {
-            document.getElementById('card-auth').style.display = 'none';
-            document.getElementById('card-finalizar').style.display = 'block';
-        } else {
-            document.getElementById('auth-container').style.display = 'none';
-            initApp(perfil);
-        }
-    } else {
-        document.getElementById('auth-container').style.display = 'flex';
-        // Garante que o card de auth apareça se o user deslogar
-        document.getElementById('card-auth').style.display = 'block';
-        document.getElementById('card-finalizar').style.display = 'none';
-    }
-});
 
 // A função init() deve ser chamada apenas dentro do initApp ou após o login
 async function init() {
