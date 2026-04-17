@@ -426,6 +426,62 @@ async function salvarPerfilFinal() {
     modal.style.display = 'flex';
 }
 
+// 2. Nova função para Renderizar o Feed
+function renderFeed() {
+    const feedLista = document.getElementById('feed-list');
+    feedLista.innerHTML = '<p style="text-align:center; padding:20px; font-size:12px; color:var(--text-sub);">Carregando aventuras...</p>';
+
+    database.ref('feed_global').limitToLast(20).on('value', (snapshot) => {
+        const posts = snapshot.val();
+        feedLista.innerHTML = '';
+        if (!posts) {
+            feedLista.innerHTML = '<p style="text-align:center; padding:20px;">Nenhuma viagem pública ainda. Seja o primeiro! 🚀</p>';
+            return;
+        }
+
+        // Converte e inverte para mostrar os mais novos primeiro
+        const listaPosts = Object.keys(posts).map(id => posts[id]).reverse();
+
+        listaPosts.forEach(post => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.style.padding = '15px';
+            card.style.marginBottom = '12px';
+            
+            card.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
+                    <div style="width:35px; height:35px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px;">👤</div>
+                    <div>
+                        <b style="font-size:14px; display:block;">@${post.username}</b>
+                        <span style="font-size:10px; color:var(--text-sub);">Explorou ${post.cidade} - ${post.uf.replace('BR','')}</span>
+                    </div>
+                </div>
+                <div class="carousel-fotos" style="height:180px; border-radius:15px;">
+                    <img src="${post.fotos && post.fotos[0] ? post.fotos[0] : ''}" style="width:100%; height:100%; object-fit:cover;">
+                </div>
+                <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:10px; font-weight:800; color:var(--primary);">#VIAJANTEBRASIL</span>
+                    <button onclick="verPerfil('${post.uid}')" style="background:var(--sky); color:var(--text-main); border:none; padding:6px 12px; border-radius:10px; font-size:10px; font-weight:800;">Ver Mapa 🗺️</button>
+                </div>
+            `;
+            feedLista.appendChild(card);
+        });
+    });
+}
+
+// 3. Atualização da função trocarAba
+function trocarAba(id, btn) {
+    document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
+    document.querySelectorAll('.btn-aba').forEach(b => b.classList.remove('active'));
+    document.getElementById('aba-' + id).classList.add('ativa');
+    btn.classList.add('active');
+    
+    if(id === 'gastos') renderGastos();
+    if(id === 'jornada') renderJornada();
+    if(id === 'timeline') renderTimeline();
+    if(id === 'feed') renderFeed(); // Chamada para a nova função
+}
+
 // ESTA FUNÇÃO VAI NO BOTÃO "UHUL!" DO SEU HTML
 function fecharCelebracaoEProxima() {
     // Remove a conquista que acabou de ser mostrada da fila
