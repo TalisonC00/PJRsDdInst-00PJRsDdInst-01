@@ -579,24 +579,49 @@ async function renderFeed() {
         const isPublico = postsPublicos[post.id] ? true : false;
         const tag = isPublico ? '🌍 BRASIL' : '👥 AMIGO';
 
-        card.innerHTML = `
-            <div class="t-card" style="margin-bottom: 15px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'};">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
-                        <div style="width:30px; height:30px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px;">👤</div>
-                        <b style="font-size:13px;">@${post.username}</b>
-                    </div>
-                    <span style="font-size:8px; font-weight:800; background:#f1f5f9; padding:3px 6px; border-radius:5px;">${tag}</span>
+        // Substitua o card.innerHTML dentro do renderFeed:
+card.innerHTML = `
+    <div class="t-card" style="margin-bottom: 20px; padding: 15px; border-radius: 20px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'};">
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
+                <div style="width:35px; height:35px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border: 1.5px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; flex-shrink:0;">
+                    ${post.fotoPerfil ? `<img src="${post.fotoPerfil}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
                 </div>
-                <p style="margin: 5px 0; font-size:14px;">Explorou <b>${post.cidade} - ${post.uf.replace('BR','')}</b></p>
-                <div class="carousel-fotos" style="height:180px; background:#f1f5f9; border-radius:15px; overflow:hidden;">
-                    <img src="${post.fotos ? post.fotos[0] : ''}" style="width:100%; height:100%; object-fit:cover;">
-                </div>
-                <div style="margin-top:10px; text-align:right;">
-                    <button onclick="verPerfil('${post.uid}')" style="background:none; border:none; color:var(--primary); font-weight:800; font-size:11px;">VER MAPA 🗺️</button>
-                </div>
+                <b style="font-size:13px; color:var(--text-main);">@${post.username}</b>
             </div>
-        `;
+            <span style="font-size:8px; font-weight:800; background:#f1f5f9; padding:3px 6px; border-radius:5px; color:var(--text-sub); text-transform:uppercase; letter-spacing:0.5px;">${tag}</span>
+        </div>
+
+        <p style="margin: 0 0 12px; font-size:14px; color:var(--text-main);">Explorou <b>${post.cidade} - ${post.uf.replace('BR','')}</b></p>
+        
+        <div class="carousel-fotos" id="feed-car-${post.id}" style="height:250px; position:relative; border-radius:18px; overflow:hidden; background:#f1f5f9; box-shadow:0 4px 15px rgba(0,0,0,0.03);" 
+             ontouchstart="hTS(event)" 
+             ontouchmove="hTM_Feed(event, '${post.id}', ${post.fotos ? post.fotos.length : 0})">
+            
+            <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
+                ${post.fotos && post.fotos.length > 0 ? post.fotos.map(f => `<img src="${f}" class="img-slide" style="width:100%; height:100%; object-fit:cover;">`).join('') : '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">📍 Sem fotos registradas</div>'}
+            </div>
+            
+            <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
+                ${post.fotos && post.fotos.length > 1 ? post.fotos.map((_, idx) => `<div class="bullet-feed-${post.id}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`).join('') : ''}
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9;">
+            
+            <div onclick="curtirPost('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-sub);">
+                <span id="heart-${post.id}" style="transition:0.3s; font-size:15px;">🤍</span> 
+                <small id="count-likes-${post.id}" style="font-weight:700;">0</small>
+            </div>
+
+            <div onclick="abrirPopUpComentarios('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-sub);">
+                <span style="font-size:15px;">💬</span> 
+                <small id="count-coments-${post.id}" style="font-weight:700;">0</small>
+            </div>
+        </div>
+    </div>
+`;
         feedLista.appendChild(card);
     });
 }
@@ -959,7 +984,135 @@ Object.keys(listaObj).forEach((idFirebase) => {
     document.getElementById('photo-popup').classList.add('show');
     document.getElementById('popup-overlay').style.display = 'block';
 }
+// Adicione esta função no seu script
+function hTM_Feed(e, idF, len) { 
+    if (!sX) return; 
+    let d = sX - e.touches[0].clientX; 
+    let tr = document.querySelector(`#feed-car-${idF} .track-fotos`); 
+    if(!tr) return;
+    
+    let curIdx = Math.round(Math.abs(new WebKitCSSMatrix(window.getComputedStyle(tr).transform).m41 / tr.offsetWidth)); 
+    
+    if (Math.abs(d) > 40) { 
+        if (d > 0 && curIdx < len - 1) curIdx++; 
+        else if (d < 0 && curIdx > 0) curIdx--; 
+        
+        tr.style.transform = `translateX(-${curIdx * 100}%)`; 
+        document.querySelectorAll(`.bullet-feed-${idF}`).forEach((b, i) => {
+            b.style.background = (i === curIdx) ? 'white' : 'rgba(255,255,255,0.4)';
+            b.style.transform = (i === curIdx) ? 'scale(1.2)' : 'scale(1)';
+        });
+        sX = 0; 
+    } 
+}
+        
+// --- CURTIR COM NOTIFICAÇÃO EM TEMPO REAL ---
+async function curtirPost(postId) {
+    const uid = userLogado.uid;
+    const postRef = database.ref(`feedPublico/${postId}`);
+    const snapPost = await postRef.once('value');
+    const dadosPost = snapPost.val();
+    
+    const refLike = database.ref(`interacoes/${postId}/curtidas/${uid}`);
+    const snapLike = await refLike.once('value');
 
+    if (snapLike.exists()) {
+        refLike.remove();
+    } else {
+        const emojis = ['❤️', '🔥', '✈️', '🧳'];
+        const emojiSorteado = emojis[Math.floor(Math.random() * emojis.length)];
+        
+        refLike.set({ emoji: emojiSorteado });
+
+        // Envia notificação para o dono do post (se não for você mesmo)
+        if (dadosPost.uid !== uid) {
+            database.ref(`notificacoes/${dadosPost.uid}`).push().set({
+                tipo: 'curtida',
+                quem: dadosUsuario.username,
+                emoji: emojiSorteado,
+                lido: false,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    }
+}
+// --- POP-UP DE COMENTÁRIOS (NOVO) ---
+function abrirPopUpComentarios(postId) {
+    const refComentarios = database.ref(`interacoes/${postId}/comentarios`);
+    
+    // Mostra o Pop-up genérico e o overlay
+    document.getElementById('popup-overlay').style.display = 'block';
+    const popup = document.getElementById('photo-popup');
+    popup.classList.add('show');
+    
+    const content = document.getElementById('popup-content');
+    content.innerHTML = '<p style="text-align:center; font-size:12px; padding:20px;">Carregando comentários...</p>';
+
+    // Listener para carregar a lista em tempo real
+    refComentarios.on('value', snap => {
+        const comentarios = snap.val();
+        
+        content.innerHTML = `
+            <h3 style="color:var(--primary); margin: 0 0 15px 10px; font-size:18px;">💬 Comentários</h3>
+            <div id="lista-comentarios-popup" style="margin-bottom:20px; max-height:350px; overflow-y:auto;">
+                ${!comentarios ? '<p style="text-align:center; font-size:12px; color:var(--text-sub); padding:20px;">Seja o primeiro a comentar! ✨</p>' : ''}
+            </div>
+            
+            <div style="display:flex; gap:10px; padding:10px; background:#f8fafc; border-radius:15px; position:sticky; bottom:0; left:0; width:100%; box-sizing:border-box;">
+                <input type="text" id="input-coment-popup" placeholder="Escreva algo..." 
+                       style="flex:1; padding:10px; font-size:12px; border-radius:10px; border:1px solid #eee;">
+                <button onclick="enviarComentarioPopup('${postId}')" 
+                        style="background:var(--primary); color:white; border:none; padding:0 15px; border-radius:10px; font-size:13px; font-weight:800;">ENVIAR</button>
+            </div>
+        `;
+        
+        if (comentarios) {
+            const lista = document.getElementById('lista-comentarios-popup');
+            Object.values(comentarios).reverse().forEach(c => {
+                const item = document.createElement('div');
+                item.style = `padding:10px; border-bottom:1px solid #f1f5f9; display:flex; gap:10px; align-items:flex-start;`;
+                item.innerHTML = `
+                    <div style="width:30px; height:30px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0;">👤</div>
+                    <div>
+                        <b style="font-size:12px; color:var(--text-main);">@${c.username}</b>
+                        <p style="margin:2px 0; font-size:12px; color:var(--text-main);">${c.texto}</p>
+                    </div>
+                `;
+                lista.appendChild(item);
+            });
+        }
+    });
+}
+// --- COMENTAR COM NOTIFICAÇÃO EM TEMPO REAL ---
+function enviarComentarioPopup(postId) {
+    const input = document.getElementById('input-coment-popup');
+    const texto = input.value.trim();
+    if (!texto) return;
+
+    const refComent = database.ref(`interacoes/${postId}/comentarios`).push();
+    refComent.set({
+        uid: userLogado.uid,
+        username: dadosUsuario.username,
+        texto: texto,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // Notificar o dono do post
+    database.ref(`feedPublico/${postId}`).once('value', snap => {
+        const p = snap.val();
+        if (p.uid !== userLogado.uid) {
+            database.ref(`notificacoes/${p.uid}`).push().set({
+                tipo: 'comentario',
+                quem: dadosUsuario.username,
+                texto: texto,
+                lido: false,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    });
+    input.value = '';
+}
+        
 let sX = 0; function hTS(e) { sX = e.touches[0].clientX; }
 function hTM(e, idF, len) { 
         if (!sX) return; 
@@ -1159,46 +1312,60 @@ async function salvarAlteracoesCompletas() {
 }
         
 function renderNotificacoes() {
-    const lista = document.getElementById('lista-notificacoes');
-    database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
-        const data = snap.val();
-        lista.innerHTML = '';
-        if (!data) { lista.innerHTML = '<p style="text-align:center; font-size:12px; padding:20px;">Nada por aqui.</p>'; return; }
+    const container = document.getElementById('aba-notificacoes');
+    
+    database.ref(`notificacoes/${userLogado.uid}`).orderByChild('timestamp').limitToLast(20).on('value', snap => {
+        const lista = snap.val();
+        container.innerHTML = '<h2 style="padding:20px 0 10px 20px;">Notificações</h2>';
+        
+        if (!lista) {
+            container.innerHTML += '<p style="text-align:center; color:var(--text-sub); margin-top:50px;">Nenhuma novidade por aqui. 🌍</p>';
+            return;
+        }
 
-        Object.keys(data).reverse().forEach(id => {
-            const n = data[id];
+        Object.keys(lista).reverse().forEach(id => {
+            const n = lista[id];
             const item = document.createElement('div');
-            item.style = `padding:15px; border-radius:20px; background:white; margin-bottom:12px; border:1px solid #eee; display:flex; gap:12px; align-items:center;`;
+            item.className = 'notif-item';
+            item.style = `padding: 15px; margin: 10px 15px; border-radius: 12px; background: ${n.lido ? '#fff' : '#f0f7ff'}; border-left: 4px solid ${n.lido ? '#eee' : 'var(--primary)'}; display:flex; gap:12px; align-items:center;`;
+            
+            const texto = n.tipo === 'curtida' 
+                ? `<b>@${n.quem}</b> reagiu à sua viagem com ${n.emoji}`
+                : `<b>@${n.quem}</b> comentou: "${n.texto}"`;
+
             item.innerHTML = `
-                <div style="width:45px; height:45px; border-radius:50%; background:#f1f5f9; overflow:hidden; flex-shrink:0;">
-                    ${n.de_foto ? `<img src="${n.de_foto}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="font-size:20px; display:flex; justify-content:center; align-items:center; height:100%;">👤</span>'}
-                </div>
-                <div style="flex:1;">
-                    <div style="font-size:13px; line-height:1.2;"><b>${n.de_nome || 'Viajante'}</b><br><span style="color:var(--text-sub);">@${n.de_username || 'anonimo'}</span></div>
-                    <div style="display:flex; gap:8px; margin-top:10px;">
-                        <button onclick="aceitarAmizade('${n.de_uid}', '${id}')" style="background:#10B981; color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">ACEITAR</button>
-                        <button onclick="database.ref('notificacoes/${userLogado.uid}/${id}').remove()" style="background:#FF4B5C; color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">RECUSAR</button>
-                    </div>
-                </div>
+                <div style="font-size:20px;">${n.tipo === 'curtida' ? '✨' : '💬'}</div>
+                <div style="font-size:12px; color:var(--text-main); flex:1;">${texto}</div>
             `;
-            lista.appendChild(item);
+            
+            // Marcar como lida ao clicar
+            item.onclick = () => database.ref(`notificacoes/${userLogado.uid}/${id}`).update({ lido: true });
+            
+            container.appendChild(item);
         });
     });
 }
 
 // Chame esta função dentro do initApp para o sininho brilhar
 function escutarNotificacoes() {
+    const badge = document.getElementById('badge-notif');
+    
     database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
         const notifs = snap.val();
-        const badge = document.getElementById('badge-notif');
         if (notifs) {
-            const count = Object.values(notifs).filter(n => !n.lida).length;
-            if (count > 0) { badge.innerText = count; badge.style.display = 'flex'; }
-            else { badge.style.display = 'none'; }
+            // Conta apenas as não lidas
+            const naoLidas = Object.values(notifs).filter(n => !n.lido).length;
+            if (naoLidas > 0) {
+                badge.innerText = naoLidas;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        } else {
+            badge.style.display = 'none';
         }
     });
 }
-
 // --- 4. ACEITAR AMIZADE ---
 async function aceitarAmizade(uidAmigo, notifId) {
     const updates = {};
