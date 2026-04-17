@@ -248,7 +248,7 @@
     
     <script>
     // 1. CONFIGURAÇÃO FIREBASE
-    const firebaseConfig = {
+const firebaseConfig = {
          apiKey: "AIzaSyDUBAP9atHjoVLRYzxQPhMAZnJUR2v1j7w",
          authDomain: "pjrsddinst-00pjrsddinst-01.firebaseapp.com",
          databaseURL: "https://pjrsddinst-00pjrsddinst-01-default-rtdb.firebaseio.com",
@@ -259,29 +259,25 @@
          measurementId: "G-ZGJGJT8BYD"
     };
 
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
 
     // 2. VARIÁVEIS GLOBAIS
-    let dbGlobal = {};
-    let controleMapa;
-    let conquistasAnteriores = []; // Controla o que já foi celebrado
-    let userLogado = null;
-    let modoRegistro = false;
-    let dadosUsuario = null;     // Dados do perfil (DB) do dono do celular (tipo, bio, etc)
-    let perfilEmFoco = null;     // De QUEM é o perfil que estamos vendo na tela agora
+let dbGlobal = {};
+let controleMapa;
+let conquistasAnteriores = []; // Controla o que já foi celebrado
+let userLogado = null;
+let modoRegistro = false;
+let dadosUsuario = null;     // Dados do perfil (DB) do dono do celular (tipo, bio, etc)
+let perfilEmFoco = null;     // De QUEM é o perfil que estamos vendo na tela agora
     
-    const REGIOES = {
+const REGIOES = {
         'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
         'NORDESTE': { icon: '🌵', color: '#FACC15', UFs: ['BRMA','BRPI','BRCE','BRRN','BRPB','BRPE','BRAL','BRSE','BRBA'], nomes: ['Maranhão','Piauí','Ceará','Rio Grande do Norte','Paraíba','Pernambuco','Alagoas','Sergipe','Bahia'] },
         'CENTRO': { icon: '☀️', color: '#FB923C', UFs: ['BRMT','BRMS','BRGO','BRDF'], nomes: ['Mato Grosso','Mato Grosso do Sul','Goiás','Distrito Federal'] },
         'SUDESTE': { icon: '🏢', color: '#EC4899', UFs: ['BRMG','BRSP','BRRJ','BRES'], nomes: ['Minas Gerais','São Paulo','Rio de Janeiro','Espírito Santo'] },
         'SUL': { icon: '❄️', color: '#A855F7', UFs: ['BRPR','BRSC','BRRS'], nomes: ['Paraná','Santa Catarina','Rio Grande do Sul'] }
     };
-
-    
-    let userLogado = null;
-let modoRegistro = false;
 
 // Observador de Autenticação
 firebase.auth().onAuthStateChanged(async (user) => {
@@ -321,49 +317,33 @@ async function executarAuth() {
 }
 
 async function verificarDisponibilidade(user) {
-    const username = user.toLowerCase().replace('@', '').trim();
-    const elCheck = document.getElementById('check-username');
-    const btn = document.getElementById('btn-salvar-final');
-    
-    if (username.length < 3) {
-        elCheck.innerText = "❌";
-        btn.disabled = true;
-        return;
+        const username = user.toLowerCase().replace('@', '').trim();
+        const elCheck = document.getElementById('check-username');
+        const btn = document.getElementById('btn-salvar-final');
+        if (username.length < 3) { elCheck.innerText = "❌"; btn.disabled = true; return; }
+        const snap = await database.ref('usernames').child(username).once('value');
+        if (snap.exists()) { elCheck.innerText = "❌"; btn.disabled = true; } 
+        else { elCheck.innerText = "✅"; btn.disabled = false; }
     }
-
-    const snap = await database.ref('usernames').child(username).once('value');
-    if (snap.exists()) {
-        elCheck.innerText = "❌";
-        btn.disabled = true;
-    } else {
-        elCheck.innerText = "✅";
-        btn.disabled = false;
-    }
-}
 
 async function salvarPerfilFinal() {
-    const user = firebase.auth().currentUser;
-    const username = document.getElementById('final-username').value.toLowerCase().replace('@', '');
-    const bio = document.getElementById('final-bio').value;
-    const tipo = document.getElementById('reg-tipo').value;
-    
-    // Salva o link de username para garantir que ninguém pegue o mesmo
-    await database.ref(`usernames/${username}`).set(user.uid);
-    
-    // Salva o perfil
-    await database.ref(`users/${user.uid}/perfil`).update({
-        username, bio, tipo, 
-        nome: document.getElementById('reg-nome').value,
-        sexo: document.getElementById('reg-sexo').value,
-        uid: user.uid
-    });
-    
-    location.reload(); // Recarrega para iniciar o app com os dados novos
-}    
+        const user = firebase.auth().currentUser;
+        const username = document.getElementById('final-username').value.toLowerCase().replace('@', '');
+        const bio = document.getElementById('final-bio').value;
+        const tipo = document.getElementById('reg-tipo').value;
         
+        await database.ref(`usernames/${username}`).set(user.uid);
+        await database.ref(`users/${user.uid}/perfil`).update({
+            username, bio, tipo, 
+            nome: document.getElementById('reg-nome').value,
+            sexo: document.getElementById('reg-sexo').value,
+            uid: user.uid
+        });
+        location.reload();
+    }   
         
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
-    async function verPerfil(uidAlvo) {
+async function verPerfil(uidAlvo) {
     // 1. Busca os dados do perfil (Bio, Tipo, Username)
     const snapPerfil = await database.ref(`users/${uidAlvo}/perfil`).once('value');
     const dadosAlvo = snapPerfil.val();
@@ -400,14 +380,14 @@ async function salvarPerfilFinal() {
     trocarAba('mapa', document.querySelectorAll('.btn-aba')[0]);
 }
         
-    function mostrarAlerta(msg, icon = '💡') {
+function mostrarAlerta(msg, icon = '💡') {
         document.getElementById('alert-msg').innerText = msg;
         document.getElementById('alert-icon').innerText = icon;
         document.getElementById('custom-alert').style.display = 'flex';
     }
 
-    function fecharAlerta() { document.getElementById('custom-alert').style.display = 'none'; }
-    function fecharPopup() {
+function fecharAlerta() { document.getElementById('custom-alert').style.display = 'none'; }
+function fecharPopup() {
         document.getElementById('photo-popup').classList.remove('show');
         document.getElementById('popup-overlay').style.display = 'none';
     }
@@ -498,7 +478,7 @@ function fecharCelebracaoEProxima() {
     }
 }
 
-    async function compartilharNoStories() {
+async function compartilharNoStories() {
     const mapaElemento = document.querySelector('.mapa-card');
     
     // Tira um "print" do mapa colorido
@@ -520,7 +500,7 @@ function fecharCelebracaoEProxima() {
     }
 }
 
-   let filaDeConquistas = [];
+let filaDeConquistas = [];
 
 function verificarNovasConquistas() {
     const metas = [
@@ -575,7 +555,7 @@ function verificarNovasConquistas() {
     }
 }
 
-    function converter(f) { 
+function converter(f) { 
         return new Promise(r => { 
             const rd = new FileReader(); 
             rd.readAsDataURL(f); 
@@ -595,7 +575,7 @@ function verificarNovasConquistas() {
     }
 
     // 4. FUNÇÕES DE RENDERIZAÇÃO
-    function renderTimeline() {
+function renderTimeline() {
     const lista = document.getElementById('timeline-list');
     lista.innerHTML = '';
     
@@ -653,7 +633,7 @@ function verificarNovasConquistas() {
     });
 }
 
-    function renderGastos() {
+function renderGastos() {
         let html = '', totalGeral = 0;
         for (const uf in dbGlobal) {
             let totalUF = 0, cidadesHtml = '';
@@ -670,7 +650,7 @@ function verificarNovasConquistas() {
         document.getElementById('total-geral-brasil').innerText = `Total Brasil: ${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
     }
 
-    function renderJornada() {
+function renderJornada() {
         const visitados = Object.keys(dbGlobal);
         let html = '';
         const metas = [{n:1, l:'Início', i:'🌱'}, {n:5, l:'5 Estados', i:'🏃'}, {n:10, l:'10 Estados', i:'⭐'}, {n:20, l:'20 Estados', i:'🔥'}, {n:26, l:'Brasil', i:'👑'}];
@@ -690,7 +670,7 @@ function verificarNovasConquistas() {
         document.getElementById('grid-conquistas').innerHTML = html;
     }
 
-    function trocarAba(id, btn) {
+function trocarAba(id, btn) {
         document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
         document.querySelectorAll('.btn-aba').forEach(b => b.classList.remove('active'));
         document.getElementById('aba-' + id).classList.add('ativa');
@@ -700,7 +680,7 @@ function verificarNovasConquistas() {
         if(id === 'timeline') renderTimeline();
     }
 
-    async function salvarViagem() {
+async function salvarViagem() {
     const elUf = document.getElementById('sel-uf'), 
           elCidade = document.getElementById('txt-cidade'), 
           elData = document.getElementById('txt-data'), 
@@ -792,7 +772,7 @@ function verificarNovasConquistas() {
     });
 }
 
-    function removerViagem(uf, idFirebase, cidade) {
+function removerViagem(uf, idFirebase, cidade) {
         const modal = document.getElementById('custom-confirm');
         const btnSim = document.getElementById('btn-confirmar');
         const btnNao = document.getElementById('btn-cancelar');
@@ -806,17 +786,17 @@ function verificarNovasConquistas() {
         };
     }
 
-    function msgRegiao(r, ok) { 
+function msgRegiao(r, ok) { 
         if(ok) return; 
         const faltantes = REGIOES[r].nomes.filter((n, i) => !Object.keys(dbGlobal).includes(REGIOES[r].UFs[i])); 
         mostrarAlerta(`Faltam no ${r}: ${faltantes.join(', ')}`, "🌵"); 
     }
 
-    function resetarMapa() {
+function resetarMapa() {
         if (controleMapa) { controleMapa.resetZoom(); controleMapa.center(); controleMapa.fit(); }
     }
 
-    function abrirHistorico(id) {
+function abrirHistorico(id) {
     // 1. Verifica Privacidade
     // Se o perfil que estamos vendo (perfilEmFoco) for privado e eu não for o dono
     const isOwner = userLogado && (perfilEmFoco.uid === userLogado.uid);
@@ -828,12 +808,12 @@ function verificarNovasConquistas() {
     }
 
     // 2. Renderização Original do Pop-up (Mantida como você pediu)
-    const listaObj = dbGlobal[id]; 
-    if (!listaObj) return;
+const listaObj = dbGlobal[id]; 
+if (!listaObj) return;
 
-    let h = `<h2 style="color:var(--primary); margin:0 0 15px 10px; font-size:20px; font-weight:800;">🚩 ${id.replace('BR','')}</h2>`;
+let h = `<h2 style="color:var(--primary); margin:0 0 15px 10px; font-size:20px; font-weight:800;">🚩 ${id.replace('BR','')}</h2>`;
     
-    Object.keys(listaObj).forEach((idFirebase) => {
+Object.keys(listaObj).forEach((idFirebase) => {
         const v = listaObj[idFirebase];
         let track = ''; let bullets = '';
         if(v.fotos) {
@@ -861,8 +841,8 @@ function verificarNovasConquistas() {
     document.getElementById('popup-overlay').style.display = 'block';
 }
 
-    let sX = 0; function hTS(e) { sX = e.touches[0].clientX; }
-    function hTM(e, idF, len) { 
+let sX = 0; function hTS(e) { sX = e.touches[0].clientX; }
+function hTM(e, idF, len) { 
         if (!sX) return; 
         let d = sX - e.touches[0].clientX; 
         let tr = document.querySelector(`#car-${idF} .track-fotos`); 
@@ -879,7 +859,7 @@ function verificarNovasConquistas() {
     }
 
     // Função de deslize específica para os carrosséis da Timeline
-    function hTM_TL(e, idF, len) { 
+function hTM_TL(e, idF, len) { 
     if (!sX) return; 
     let d = sX - e.touches[0].clientX; 
     let tr = document.querySelector(`#tl-car-${idF} .track-fotos`); 
@@ -899,10 +879,10 @@ function verificarNovasConquistas() {
     } 
 }
         
-    function atualizarInterface() { 
-    document.querySelectorAll('path').forEach(p => p.classList.remove('visitado'));
-    Object.keys(dbGlobal).forEach(u => { const el = document.getElementById(u); if(el) el.classList.add('visitado'); }); 
-    document.getElementById('info').innerText = `ESTADOS CONQUISTADOS: ${Object.keys(dbGlobal).length}`; 
+function atualizarInterface() { 
+        document.querySelectorAll('path').forEach(p => p.classList.remove('visitado'));
+        Object.keys(dbGlobal).forEach(u => { const el = document.getElementById(u); if(el) el.classList.add('visitado'); }); 
+        document.getElementById('info').innerText = `ESTADOS CONQUISTADOS: ${Object.keys(dbGlobal).length}`; 
     }
 
     // --- COLOQUE ESTAS FUNÇÕES DENTRO DO SEU SCRIPT ---
@@ -969,20 +949,22 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
 // A função init() deve ser chamada apenas dentro do initApp ou após o login
 async function init() {
-    const res = await fetch('br.svg');
-    const svg = await res.text();
-    document.getElementById('svg-container').innerHTML = svg;
-    const svgEl = document.querySelector('#svg-container svg');
-    if(svgEl) {
-        svgEl.id = "mapa-svg-real"; svgEl.style.width = "100%"; svgEl.style.height = "100%";
-        controleMapa = svgPanZoom('#mapa-svg-real', { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, zoomScaleSensitivity: 0.3, minZoom: 0.5, maxZoom: 10 });
-
-        document.getElementById('svg-container').addEventListener('touchend', (e) => {
-            const target = e.target.closest('path');
-            if (target && target.id) abrirHistorico(target.id);
-        });
+        try {
+            const res = await fetch('br.svg');
+            const svg = await res.text();
+            document.getElementById('svg-container').innerHTML = svg;
+            const svgEl = document.querySelector('#svg-container svg');
+            if(svgEl) {
+                svgEl.id = "mapa-svg-real"; svgEl.style.width = "100%"; svgEl.style.height = "100%";
+                controleMapa = svgPanZoom('#mapa-svg-real', { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, zoomScaleSensitivity: 0.3, minZoom: 0.5, maxZoom: 10 });
+                document.getElementById('svg-container').addEventListener('touchend', (e) => {
+                    const target = e.target.closest('path');
+                    if (target && target.id) abrirHistorico(target.id);
+                });
+                atualizarInterface();
+            }
+        } catch (e) { console.error("Erro ao carregar mapa:", e); }
     }
-}
         
 </script>
 </body>
