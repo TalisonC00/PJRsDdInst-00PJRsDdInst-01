@@ -255,7 +255,7 @@
     
     <div id="aba-jornada" class="aba">
         <div class="card">
-            <h3>🏆 Conquistas</h3>
+            <h3>🏆 Passaporte</h3>
             <div class="badge-grid" id="grid-conquistas"></div>
         </div>
     </div>
@@ -287,10 +287,10 @@
     </div>
 
     <nav class="menu-nav">
-    <button class="btn-aba" onclick="trocarAba('Feed', this)">🌐</button>
-    <button class="btn-aba active" onclick="trocarAba('Mapa', this)">🗺️</button>
-    <button class="btn-aba" onclick="trocarAba('Timeline', this)">⏱</button>
-    <button class="btn-aba" onclick="trocarAba('Passaporte', this)">🏆</button>
+    <button class="btn-aba" onclick="trocarAba('feed', this)">🌐</button>
+    <button class="btn-aba active" onclick="trocarAba('mapa', this)">🗺️</button>
+    <button class="btn-aba" onclick="trocarAba('timeline', this)">⏱</button>
+    <button class="btn-aba" onclick="trocarAba('jornada', this)">🏆</button>
     
     <button id="btn-nav-registro" class="btn-aba" onclick="trocarAba('registro', this)">➕</button>
     <button id="btn-nav-gastos" class="btn-aba" onclick="trocarAba('gastos', this)">💰</button>
@@ -667,8 +667,8 @@ async function compartilharNoStories() {
     if (navigator.share) {
         try {
             await navigator.share({
-                title: 'Nossa Jornada',
-                text: 'Olha como está ficando nosso mapa do Brasil! 🇧🇷',
+                title: 'Minhas Viagens',
+                text: 'Olha como está ficando meu mapa do Brasil! 🇧🇷',
                 files: [file] // Envia a foto real do mapa colorido!
             });
         } catch (err) {
@@ -911,7 +911,7 @@ async function salvarViagem() {
         elCidade.value = ""; elData.value = ""; elHosp.value = ""; 
         elTrans.value = ""; elAlime.value = ""; elAtrac.value = ""; 
         elFoto.value = ""; elPraia.checked = false;
-        mostrarAlerta("Memória salva na sua jornada!", "📌");
+        mostrarAlerta("Viagem salva na sua jornada!", "📌");
         trocarAba('mapa', document.querySelectorAll('.btn-aba')[1]);
     }).catch(e => mostrarAlerta("Erro ao salvar: " + e.message, "❌"));
 }
