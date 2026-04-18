@@ -610,14 +610,19 @@ card.innerHTML = `
             <span style="font-size:8px; font-weight:800; background:#f1f5f9; padding:3px 6px; border-radius:5px; color:var(--text-sub); text-transform:uppercase;">${tag}</span>
         </div>
 
-        <div class="carousel-fotos" id="feed-car-${post.id}" style="height:300px; position:relative; border-radius:18px; overflow:hidden; background:#f1f5f9;">
-            <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
-                ${post.fotos && post.fotos.length > 0 ? post.fotos.map(f => `<img src="${f}" class="img-slide" style="width:100%; height:100%; object-fit:cover;">`).join('') : '📍 Sem fotos'}
-            </div>
-            <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
-                ${post.fotos && post.fotos.length > 1 ? post.fotos.map((_, idx) => `<div class="bullet-feed-${post.id}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`).join('') : ''}
-            </div>
-        </div>
+        <div class="carousel-fotos" id="feed-car-${post.id}" 
+      style="height:300px; position:relative; border-radius:18px; overflow:hidden; background:#f1f5f9;" 
+      ontouchstart="hTS(event)" 
+      ontouchmove="hTM_Feed(event, '${post.id}', ${post.fotos ? post.fotos.length : 0})">
+    
+    <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
+        ${post.fotos.map(f => `<img src="${f}" class="img-slide" style="width:100%; height:100%; object-fit:cover;">`).join('')}
+    </div>
+
+    <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
+        ${post.fotos.length > 1 ? post.fotos.map((_, idx) => `<div class="bullet-feed-${post.id}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`).join('') : ''}
+    </div>
+</div>
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
             <div onclick="curtirPost('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:4px;">
