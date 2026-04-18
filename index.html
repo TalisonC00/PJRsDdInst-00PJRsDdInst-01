@@ -548,16 +548,12 @@ async function renderFeed() {
     const feedLista = document.getElementById('feed-list');
     feedLista.innerHTML = '<p style="text-align:center; padding:20px; font-size:12px;">Buscando novas aventuras...</p>';
 
-    // 1. Busca os posts do Feed Global (Viajantes Brasil)
-    // Usamos limitToLast para pegar os últimos criados e reverse() para por no topo
-    const snapPublicos = await database.ref('feed_global').limitToLast(20).once('value');
+    const snapPublicos = await database.ref('feed_global').limitToLast(77).once('value');
     const postsPublicos = snapPublicos.val() || {};
 
-    // 2. Busca sua lista de amigos
     const snapSeguindo = await database.ref(`users/${userLogado.uid}/seguindo`).once('value');
     const listaAmigos = snapSeguindo.val() ? Object.keys(snapSeguindo.val()) : [];
 
-    // 3. Busca posts recentes dos amigos
     let postsAmigos = {};
     for (const amigoId of listaAmigos) {
         const snapAmigo = await database.ref(`users/${amigoId}/viagens`).limitToLast(1).once('value');
@@ -569,15 +565,11 @@ async function renderFeed() {
         }
     }
 
-    // 4. Une os dois e inverte a ordem (O mais recente postado fica em cima)
     const todosPosts = { ...postsPublicos, ...postsAmigos };
-    
-    // Transformamos em array e invertemos para manter a ordem de publicação
     const listaOrdenada = Object.keys(todosPosts)
         .map(id => ({...todosPosts[id], id}))
         .reverse(); 
 
-    // 5. Renderiza na tela
     feedLista.innerHTML = '';
     if (listaOrdenada.length === 0) {
         feedLista.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-sub); font-size:13px;">Nenhuma viagem encontrada. Explore o Brasil! 🇧🇷</p>';
@@ -593,7 +585,7 @@ async function renderFeed() {
         const tag = isPublico ? '🌍 BRASIL' : '👥 AMIGO';
 
         card.innerHTML = `
-            <div class="t-card" style="padding: 15px; border-radius: 20px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'};">
+            <div class="t-card" style="padding: 15px; border-radius: 20px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; position: relative;">
                 
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                     <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
@@ -612,25 +604,31 @@ async function renderFeed() {
                      style="height:300px; position:relative; border-radius:18px; overflow:hidden; background:#f1f5f9; box-shadow:0 4px 15px rgba(0,0,0,0.03);" 
                      ontouchstart="hTS(event)" 
                      ontouchmove="hTM_Feed(event, '${post.id}', ${post.fotos ? post.fotos.length : 0})">
-                    
                     <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
-                        ${post.fotos && post.fotos.length > 0 ? 
-                            post.fotos.map(f => `<img src="${f}" class="img-slide" style="width:100%; height:100%; object-fit:cover;">`).join('') : 
-                            '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">📍 Sem fotos registradas</div>'}
+                        ${post.fotos && post.fotos.length > 0 ? post.fotos.map(f => `<img src="${f}" class="img-slide" style="width:100%; height:100%; object-fit:cover;">`).join('') : '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">📍 Sem fotos registradas</div>'}
                     </div>
-
                     <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
-                        ${post.fotos && post.fotos.length > 1 ? 
-                            post.fotos.map((_, idx) => `<div class="bullet-feed-${post.id}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`).join('') : ''}
+                        ${post.fotos && post.fotos.length > 1 ? post.fotos.map((_, idx) => `<div class="bullet-feed-${post.id}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`).join('') : ''}
                     </div>
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:5px;">
-                    <div onclick="curtirPost('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:6px; color:var(--text-main);">
-                        <span id="heart-${post.id}" style="font-size:18px;">🤍</span> 
-                        <small id="count-likes-${post.id}" style="font-weight:800; font-size:12px;">0</small>
+                <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; gap:15px; position: relative;">
+                    
+                    <div style="position:relative; display:flex; align-items:center; gap:5px;">
+                        <div id="selector-${post.id}" style="display:none; position:absolute; bottom:30px; right:0; background:white; padding:8px; border-radius:20px; box-shadow:0 5px 15px rgba(0,0,0,0.2); z-index:100; gap:10px; border:1px solid #eee; align-items:center;">
+                            <span onclick="escolherReacao('${post.id}', '❤️')" style="cursor:pointer; font-size:20px;">❤️</span>
+                            <span onclick="escolherReacao('${post.id}', '🔥')" style="cursor:pointer; font-size:20px;">🔥</span>
+                            <span onclick="escolherReacao('${post.id}', '✈️')" style="cursor:pointer; font-size:20px;">✈️</span>
+                            <span onclick="escolherReacao('${post.id}', '🧳')" style="cursor:pointer; font-size:20px;">🧳</span>
+                        </div>
+                        
+                        <div onclick="abrirSeletorReacoes('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--text-main);">
+                            <span id="heart-${post.id}" style="font-size:18px;">🤍</span> 
+                            <small id="count-likes-${post.id}" style="font-weight:800; font-size:12px;">0</small>
+                        </div>
                     </div>
-                    <div onclick="abrirPopUpComentarios('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:6px; color:var(--text-main);">
+
+                    <div onclick="abrirPopUpComentarios('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--text-main);">
                         <span style="font-size:18px;">💬</span> 
                         <small id="count-coments-${post.id}" style="font-weight:800; font-size:12px;">0</small>
                     </div>
@@ -638,33 +636,68 @@ async function renderFeed() {
             </div>
         `;
         feedLista.appendChild(card);
-        
-        // Inicia o listener de curtidas/comentários para este card específico
         vincularInteracoesTempoReal(post.id);
     });
 }
 
+function abrirSeletorReacoes(postId) {
+    const selector = document.getElementById(`selector-${postId}`);
+    // Fecha todos os outros seletores abertos antes de abrir este
+    document.querySelectorAll('[id^="selector-"]').forEach(s => {
+        if(s.id !== `selector-${postId}`) s.style.display = 'none';
+    });
+    selector.style.display = selector.style.display === 'flex' ? 'none' : 'flex';
+}
+
+async function escolherReacao(postId, emojiEscolhido) {
+    const uid = userLogado.uid;
+    const refLike = database.ref(`interacoes/${postId}/curtidas/${uid}`);
+    
+    // Fecha o seletor após clicar
+    document.getElementById(`selector-${postId}`).style.display = 'none';
+
+    const snap = await refLike.once('value');
+    
+    // Se clicar no mesmo emoji que já está lá, remove a curtida (descurtir)
+    if (snap.exists() && snap.val().emoji === emojiEscolhido) {
+        await refLike.remove();
+    } else {
+        // Salva a escolha do usuário no banco
+        await refLike.set({
+            emoji: emojiEscolhido,
+            username: dadosUsuario.username,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        
+        // Dispara a notificação em tempo real para o dono
+        enviarNotificacao(postId, 'curtida', emojiEscolhido);
+    }
+}
 // Função auxiliar para garantir que os números de curtidas atualizem sem refresh
 function vincularInteracoesTempoReal(postId) {
     database.ref(`interacoes/${postId}`).on('value', snap => {
         const data = snap.val();
+        const elL = document.getElementById(`count-likes-${postId}`);
+        const elH = document.getElementById(`heart-${postId}`);
+        const elC = document.getElementById(`count-coments-${postId}`);
+
         if (data) {
             const nLikes = data.curtidas ? Object.keys(data.curtidas).length : 0;
             const nComents = data.comentarios ? Object.keys(data.comentarios).length : 0;
             
-            const elL = document.getElementById(`count-likes-${postId}`);
-            const elC = document.getElementById(`count-coments-${postId}`);
-            const elH = document.getElementById(`heart-${postId}`);
-
             if(elL) elL.innerText = nLikes;
             if(elC) elC.innerText = nComents;
-            
-            // Se o usuário logado curtiu, o coração fica vermelho
+
             if(elH && data.curtidas && data.curtidas[userLogado.uid]) {
-                elH.innerText = '❤️';
+                // Pega o emoji específico que esse usuário escolheu
+                elH.innerText = data.curtidas[userLogado.uid].emoji || '❤️';
             } else if(elH) {
                 elH.innerText = '🤍';
             }
+        } else {
+            if(elL) elL.innerText = "0";
+            if(elC) elC.innerText = "0";
+            if(elH) elH.innerText = '🤍';
         }
     });
 }
