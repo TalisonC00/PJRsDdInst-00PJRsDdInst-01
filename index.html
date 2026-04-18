@@ -740,21 +740,36 @@ function abrirProximoAjuste() {
 
     const file = filaDeFotos.shift();
     const reader = new FileReader();
+    
     reader.onload = (e) => {
-        document.getElementById('modal-crop').style.display = 'flex';
+        const modal = document.getElementById('modal-crop');
         const image = document.getElementById('image-to-crop');
+        
+        // 1. Limpa a imagem antiga antes de carregar a nova
+        if (cropper) {
+            cropper.destroy();
+            cropper = null;
+        }
+        
         image.src = e.target.result;
+        modal.style.display = 'flex';
 
-        // Destrói cropper anterior se existir
-        if (cropper) cropper.destroy();
-
-        // Inicializa o Cropper
-        cropper = new Cropper(image, {
-            aspectRatio: 1, // Quadrado perfeito para o feed
-            viewMode: 1,
-            autoCropArea: 1,
-            dragMode: 'move'
-        });
+        // 2. IMPORTANTE: Só inicia o Cropper quando a imagem estiver REALMENTE carregada na tela
+        image.onload = () => {
+            cropper = new Cropper(image, {
+                aspectRatio: 1,
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 1,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: false, // Mantém o quadrado fixo
+                toggleDragModeOnDblclick: false,
+            });
+        };
     };
     reader.readAsDataURL(file);
 }
@@ -1208,8 +1223,52 @@ async function curtirPost(postId) {
 }
 
 // --- POP-UP E ENVIO DE COMENTÁRIOS ---
+function abrirPopUpComentarios(postId) {
+    // 1. Abre o overlay e o modal que você já tem no HTML
+    document.getElementById('popup-overlay').style.display = 'block';
+    const popup = document.getElementById('photo-popup');
+    popup.classList.add('show');
+    
+    const content = document.getElementById('popup-content');
+    content.innerHTML = '<p style="text-align:center; padding:20px; font-size:12px;">Carregando comentários...</p>';
+
+    // 2. Escuta os comentários desse post em tempo real
+    database.ref(`interacoes/${postId}/comentarios`).on('value', snap => {
+        const comentarios = snap.val();
+        
+        content.innerHTML = `
+            <h3 style="color:var(--primary); margin: 0 0 15px 10px; font-size:18px;">💬 Comentários</h3>
+            <div id="lista-coments-fluxo" style="max-height:300px; overflow-y:auto; margin-bottom:15px; padding:0 10px;">
+                ${!comentarios ? '<p style="text-align:center; color:var(--text-sub); font-size:12px; padding:20px;">Nenhum comentário ainda. Seja o primeiro! ✨</p>' : ''}
+            </div>
+            
+            <div style="display:flex; gap:10px; padding:10px; background:#f8fafc; border-radius:15px; position:sticky; bottom:0;">
+                <input type="text" id="input-coment-modal" placeholder="Escreva algo..." style="flex:1; padding:10px; font-size:12px; border-radius:10px; border:1px solid #eee;">
+                <button onclick="enviarComentarioPopup('${postId}')" style="background:var(--primary); color:white; border:none; padding:0 15px; border-radius:10px; font-size:12px; font-weight:800;">ENVIAR</button>
+            </div>
+        `;
+
+        if (comentarios) {
+            const listaDiv = document.getElementById('lista-coments-fluxo');
+            Object.values(comentarios).reverse().forEach(c => {
+                const item = document.createElement('div');
+                item.style = "padding:10px; border-bottom:1px solid #f1f5f9; display:flex; gap:10px;";
+                item.innerHTML = `
+                    <div style="width:30px; height:30px; background:#eee; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">👤</div>
+                    <div style="flex:1;">
+                        <b style="font-size:12px;">@${c.username}</b>
+                        <p style="margin:2px 0; font-size:12px; color:var(--text-main);">${c.texto}</p>
+                    </div>
+                `;
+                listaDiv.appendChild(item);
+            });
+        }
+    });
+}
+
+// FUNÇÃO PARA ENVIAR O COMENTÁRIO DENTRO DO MODAL
 function enviarComentarioPopup(postId) {
-    const input = document.getElementById('input-coment-popup');
+    const input = document.getElementById('input-coment-modal');
     const texto = input.value.trim();
     if (!texto) return;
 
@@ -1220,6 +1279,7 @@ function enviarComentarioPopup(postId) {
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
 
+    // Notifica o dono (mesma lógica de antes)
     enviarNotificacao(postId, 'comentario', texto);
     input.value = '';
 }
@@ -1311,27 +1371,45 @@ function atualizarInterface() {
 
     // --- COLOQUE ESTAS FUNÇÕES DENTRO DO SEU SCRIPT ---
 async function enviarSolicitacao(uidAlvo, btn) {
-    if(btn.innerText === "ENVIADO") return;
-
-    const ref = database.ref(`notificacoes/${uidAlvo}`).push();
-    await ref.set({
-        tipo: 'amizade',
-        de_uid: userLogado.uid,
-        de_username: dadosUsuario.username,
-        de_nome: dadosUsuario.nome,
-        de_foto: dadosUsuario.foto || '',
-        lida: false,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
+    if (!userLogado) return mostrarAlerta("Faça login para adicionar amigos", "🔒");
     
-    btn.innerText = "ENVIADO";
-    btn.style.background = "#CBD5E1";
-    mostrarAlerta("Solicitação enviada!", "📩");
+    // Evita cliques duplicados
+    if (btn && (btn.innerText === "ENVIADO" || btn.disabled)) return;
+    if (btn) btn.disabled = true;
+
+    try {
+        const refNotif = database.ref(`notificacoes/${uidAlvo}`).push();
+        await refNotif.set({
+            tipo: 'amizade',
+            de_uid: userLogado.uid,
+            de_username: dadosUsuario.username,
+            de_nome: dadosUsuario.nome || dadosUsuario.username,
+            de_foto: dadosUsuario.foto || '',
+            lida: false,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        
+        if (btn) {
+            btn.innerText = "ENVIADO";
+            btn.style.background = "#CBD5E1";
+            btn.style.color = "#64748B";
+        }
+        mostrarAlerta("Solicitação enviada com sucesso!", "📩");
+    } catch (error) {
+        console.error("Erro ao enviar solicitação:", error);
+        mostrarAlerta("Erro ao enviar. Tente novamente.", "❌");
+        if (btn) btn.disabled = false;
+    }
 }
         
 async function pesquisarUsuarios(termo) {
     const listaBusca = document.getElementById('resultado-busca');
     const query = termo.toLowerCase().trim();
+    // LIMPEZA CRUCIAL: Se apagar o texto, limpa a div e encerra a função
+    if (query.length === 0) { 
+        listaBusca.innerHTML = ''; 
+        return; 
+    }
     if (query.length < 3) { listaBusca.innerHTML = ''; return; }
 
     database.ref('users').orderByChild('perfil/username').startAt(query).endAt(query + '\uf8ff').limitToFirst(5).once('value', snap => {
@@ -1465,66 +1543,59 @@ async function salvarAlteracoesCompletas() {
         
 function renderNotificacoes() {
     const container = document.getElementById('aba-notificacoes');
-    
+    if (!container) return;
+
     database.ref(`notificacoes/${userLogado.uid}`).orderByChild('timestamp').limitToLast(20).on('value', snap => {
         const lista = snap.val();
-        container.innerHTML = '<h3 style="color:var(--primary); padding:20px 0 10px 20px;">🔔 Notificações</h3>';
-        
+        // Limpa e mantém o título
+        container.innerHTML = '<div class="card"><h3 style="color:var(--primary); margin-bottom:15px;">🔔 Notificações</h3><div id="lista-real"></div></div>';
+        const listaDiv = document.getElementById('lista-real');
+
         if (!lista) {
-            container.innerHTML += '<p style="text-align:center; color:var(--text-sub); margin-top:50px; font-size:12px;">Nenhuma novidade por aqui. 🌍</p>';
+            listaDiv.innerHTML = '<p style="text-align:center; color:var(--text-sub); font-size:12px; padding:20px;">Nenhuma novidade por aqui. 🌍</p>';
             return;
         }
 
         Object.keys(lista).reverse().forEach(id => {
             const n = lista[id];
             const item = document.createElement('div');
-            
-            // Estilo dinâmico: azul claro se não lida, branco se lida
-            item.style = `padding: 15px; margin: 0 16px 12px; border-radius: 20px; background: ${n.lido ? '#fff' : '#f0f9ff'}; border: 1px solid ${n.lido ? '#eee' : 'var(--sky)'}; display:flex; gap:12px; align-items:center; transition: 0.3s; cursor: pointer;`;
+            item.style = `padding: 15px; border-radius: 15px; background: ${n.lido ? '#fff' : '#f0f9ff'}; border: 1px solid ${n.lido ? '#eee' : 'var(--sky)'}; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;`;
 
-            // Lógica de ícone e texto por tipo
-            let icone = '✨';
-            let msg = '';
-            let acoesHtml = '';
+            let msg = "";
+            let acoes = "";
 
             if (n.tipo === 'amizade') {
-                icone = '🤝';
-                msg = `<b>@${n.quem || n.de_username}</b> enviou uma solicitação de amizade.`;
-                acoesHtml = `
-                    <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button onclick="aceitarAmizade('${n.de_uid}', '${id}')" style="background:var(--money); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800;">ACEITAR</button>
-                        <button onclick="recusarNotificacao('${id}')" style="background:#fee2e2; color:#ef4444; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800;">RECUSAR</button>
+                msg = `<b>@${n.de_username}</b> quer ser seu amigo.`;
+                acoes = `
+                    <div style="display:flex; gap:5px; margin-top:8px;">
+                        <button onclick="aceitarAmizade('${n.de_uid}', '${id}')" style="background:var(--money); color:white; border:none; padding:5px 10px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">ACEITAR</button>
+                        <button onclick="recusarNotificacao('${id}')" style="background:#fee2e2; color:#ef4444; border:none; padding:5px 10px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">RECUSAR</button>
                     </div>`;
             } else if (n.tipo === 'curtida') {
-                icone = n.conteudo || '❤️';
-                msg = `<b>@${n.quem}</b> reagiu à sua viagem.`;
+                msg = `<b>@${n.quem}</b> reagiu com ${n.conteudo || '❤️'}`;
             } else if (n.tipo === 'comentario') {
-                icone = '💬';
                 msg = `<b>@${n.quem}</b> comentou: "${n.conteudo}"`;
             }
 
             item.innerHTML = `
-                <div style="font-size:20px; width:40px; height:40px; background:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.05);">${icone}</div>
+                <div style="width:35px; height:35px; background:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid #eee;">
+                    ${n.de_foto ? `<img src="${n.de_foto}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
+                </div>
                 <div style="flex:1;">
-                    <div style="font-size:12px; color:var(--text-main); line-height:1.4;">${msg}</div>
-                    ${acoesHtml}
+                    <span style="font-size:12px; color:var(--text-main);">${msg}</span>
+                    ${acoes}
                 </div>
             `;
             
-            // Ao clicar em qualquer notificação, marca como lida
-            item.onclick = (e) => {
-                // Se clicar nos botões de aceitar/recusar, não dispara este clique
-                if(e.target.tagName !== 'BUTTON') {
-                    database.ref(`notificacoes/${userLogado.uid}/${id}`).update({ lido: true });
-                }
-            };
-            
-            container.appendChild(item);
+            // Marcar como lida ao clicar na div (se não for amizade que precisa de botão)
+            if (n.tipo !== 'amizade') {
+                item.onclick = () => database.ref(`notificacoes/${userLogado.uid}/${id}`).update({ lido: true });
+            }
+
+            listaDiv.appendChild(item);
         });
     });
 }
-
-// --- 4. ACEITAR AMIZADE ---
 // --- ACEITAR AMIZADE ---
 async function aceitarAmizade(uidAmigo, notifId) {
     const updates = {};
