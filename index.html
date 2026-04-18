@@ -1531,38 +1531,17 @@ function abrirVisualizacaoPerfil() {
     const totalEstados = Object.keys(dbGlobal).length;
 
     container.innerHTML = `
-        <div class="card" style="text-align:center; position:relative;">
-            <button onclick="abrirMeuPerfilDetalhado()" style="position:absolute; top:20px; right:20px; background:none; border:none; font-size:20px; cursor:pointer;">⚙️</button>
-            
-            <div style="width:90px; height:90px; background:var(--sky); border-radius:50%; margin:10px auto 15px; display:flex; align-items:center; justify-content:center; overflow:hidden; border:3px solid var(--primary);">
-                ${dadosUsuario.foto ? `<img src="${dadosUsuario.foto}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="font-size:40px;">👤</span>'}
-            </div>
-            
-            <h2 style="margin:0; font-weight:800; font-size:18px;">${dadosUsuario.nome || 'Viajante'}</h2>
-            
-            <p style="margin:2px 0 10px; color:var(--primary); font-weight:700; font-size:14px;">@${dadosUsuario.username}</p>
-            
-            <p style="margin:0 0 20px; font-size:10px; font-weight:800; color:var(--text-sub); text-transform:uppercase; letter-spacing:1px;">
-                ${totalEstados} ${totalEstados === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}
-            </p>
-            
-            <div style="background:#f8fafc; padding:15px; border-radius:20px; margin-bottom:20px; text-align:left;">
-                <span style="font-size:10px; font-weight:800; color:var(--text-sub); text-transform:uppercase;">Minha Bio</span>
-                <p style="margin:5px 0 0; font-size:14px; color:var(--text-main); line-height:1.4;">${dadosUsuario.bio || 'Sem bio definida ainda.'}</p>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
-                <span class="pill" style="background:var(--sky); color:var(--text-main); padding:8px 15px; border-radius:12px; font-size:12px; font-weight:800;">
-                    ${dadosUsuario.tipo === 'publico' ? '🌍 VIAJANTE BRASIL' : '🔒 VIAJANTE LOCAL'}
-                </span>
-                
-                <button onclick="firebase.auth().signOut().then(() => location.reload())" 
-                        style="background:none; color:var(--primary); font-weight:800; border:none; cursor:pointer; margin-top:15px; font-size:13px; text-decoration:underline;">
-                    SAIR DA CONTA
-                </button>
-            </div>
-        </div>
-    `;
+<div style="display: flex; justify-content: center; gap: 20px; margin: 15px 0;">
+    <div style="text-align: center;" onclick="verListaAmigos('seguindo')">
+        <b style="display: block; font-size: 16px; color: var(--text-main);">${totalSeguindo}</b>
+        <span style="font-size: 10px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguindo</span>
+    </div>
+    <div style="text-align: center;" onclick="verListaAmigos('seguidores')">
+        <b style="display: block; font-size: 16px; color: var(--text-main);">${totalSeguidores}</b>
+        <span style="font-size: 10px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguidores</span>
+    </div>
+</div>
+`;
     trocarAba('perfil-detalhado', null);
 }
 // --- 3. LÓGICA DE SALVAMENTO ---
