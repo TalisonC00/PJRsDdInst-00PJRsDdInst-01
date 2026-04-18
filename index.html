@@ -1308,6 +1308,7 @@ function escutarNotificacoes() {
     database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
         const notifs = snap.val();
         if (notifs) {
+            if (navigator.vibrate) navigator.vibrate(200); // Vibra por 200ms
             // Filtra apenas as que existem e não foram lidas
             const naoLidas = Object.values(notifs).filter(n => n && !n.lido).length;
             
