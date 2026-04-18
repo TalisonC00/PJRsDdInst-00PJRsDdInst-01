@@ -434,51 +434,84 @@ async function salvarPerfilFinal() {
         
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
 async function verPerfil(uidAlvo) {
-    // 1. Busca os dados do perfil (Bio, Tipo, Username)
-    const snapPerfil = await database.ref(`users/${uidAlvo}/perfil`).once('value');
-    const dadosAlvo = snapPerfil.val();
+    try {
+        // 1. Busca os dados do perfil alvo (Bio, Tipo, Username)
+        const snapPerfil = await database.ref(`users/${uidAlvo}/perfil`).once('value');
+        const dadosAlvo = snapPerfil.val();
 
-    if (!dadosAlvo) {
-        mostrarAlerta("Usuário não encontrado.", "❌");
-        return;
+        if (!dadosAlvo) {
+            mostrarAlerta("Usuário não encontrado.", "❌");
+            return;
+        }
+
+        // 2. ATUALIZA O ESTADO GLOBAL DE FOCO
+        // Isso é o que as funções renderTimeline e abrirHistorico usam para segurança
+        perfilEmFoco = dadosAlvo;
+        const isOwner = (uidAlvo === userLogado.uid);
+
+        // 3. Busca as viagens desse usuário específico
+        const snapViagens = await database.ref(`users/${uidAlvo}/viagens`).once('value');
+        dbGlobal = snapViagens.val() || {}; 
+
+        // 4. Controle de Interface (Menu de Navegação)
+        // Se não for o dono, escondemos abas de edição e gastos privados
+        const btnRegistro = document.getElementById('btn-nav-registro');
+        const btnGastos = document.getElementById('btn-nav-gastos');
+        const btnHome = document.getElementById('btn-nav-home');
+
+        if (btnRegistro) btnRegistro.style.display = isOwner ? "block" : "none";
+        if (btnGastos) btnGastos.style.display = isOwner ? "block" : "none";
+        
+        // Se estiver visitando outra pessoa, mostra um botão "🏠" ou volta para o meu perfil
+        if (btnHome) btnHome.style.display = isOwner ? "none" : "block";
+
+        // 5. Atualiza a Identidade Visual do Header
+        const userBadge = document.getElementById('user-badge');
+        const elRealName = document.getElementById('user-real-name-header');
+        const elInfo = document.getElementById('info');
+        
+        if (userBadge) userBadge.innerText = `@${dadosAlvo.username}`;
+        if (elRealName) elRealName.innerText = dadosAlvo.nome || "Viajante";
+
+        if (!isOwner) {
+            elInfo.innerHTML = `VISITANDO PERFIL <button onclick="verPerfil(userLogado.uid)" style="font-size:8px; background:var(--primary); color:white; border:none; border-radius:5px; padding:2px 5px; margin-left:5px; cursor:pointer; font-weight:800;">VER MEU MAPA</button>`;
+        } else {
+            const total = Object.keys(dbGlobal).length;
+            elInfo.innerText = `${total} ${total === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}`;
+        }
+
+        // 6. Atualiza a Foto no Header (mostra a foto de quem você está visitando)
+        const elImg = document.getElementById('img-perfil-header');
+        const elEmoji = document.getElementById('emoji-perfil-header');
+        if (dadosAlvo.foto && elImg) {
+            elImg.src = dadosAlvo.foto;
+            elImg.style.display = "block";
+            if(elEmoji) elEmoji.style.display = "none";
+        } else if (elEmoji) {
+            if(elImg) elImg.style.display = "none";
+            elEmoji.style.display = "block";
+        }
+
+        // 7. RESET DE VISUALIZAÇÃO E RENDERIZAÇÃO SEGURA
+        fecharPopup();
+        
+        // Pinta o mapa conforme os estados do usuário visitado
+        atualizarInterface(); 
+        
+        // Renderiza a timeline (ela agora tem as travas de isOwner e perfilPrivado)
+        renderTimeline(); 
+        
+        // Se tiver aba de conquistas/jornada, renderiza também
+        renderJornada();
+
+        // 8. Força a navegação para a aba Mapa para o usuário ver o progresso do alvo
+        const botoesNav = document.querySelectorAll('.btn-aba');
+        trocarAba('mapa', botoesNav[1]); 
+
+    } catch (error) {
+        console.error("Erro ao carregar perfil:", error);
+        mostrarAlerta("Erro ao visitar perfil.", "❌");
     }
-
-    // 2. ATUALIZA O FOCO
-    perfilEmFoco = dadosAlvo;
-    const isOwner = (uidAlvo === userLogado.uid);
-
-    // 3. Busca as viagens desse usuário específico
-    const snapViagens = await database.ref(`users/${uidAlvo}/viagens`).once('value');
-    dbGlobal = snapViagens.val() || {}; 
-
-    // 4. Lógica do Menu (Esconder botões privados se não for o dono)
-    const btnRegistro = document.getElementById('btn-nav-registro');
-    const btnGastos = document.getElementById('btn-nav-gastos');
-
-    if (btnRegistro) btnRegistro.style.display = isOwner ? "block" : "none";
-    if (btnGastos) btnGastos.style.display = isOwner ? "block" : "none";
-
-    // 5. Atualiza a Interface
-    atualizarInterface(); 
-    renderTimeline();     
-    renderJornada();      
-    
-    // 6. Ajusta o Header
-    const userBadge = document.getElementById('user-badge');
-    if (userBadge) userBadge.innerText = `@${dadosAlvo.username}`;
-    
-    if (!isOwner) {
-        document.getElementById('info').innerHTML = `VISITANDO PERFIL <button onclick="verPerfil(userLogado.uid)" style="font-size:9px; background:var(--primary); color:white; border:none; border-radius:5px; padding:2px 5px; margin-left:5px; cursor:pointer;">VER MEU MAPA</button>`;
-    } else {
-        document.getElementById('info').innerText = `ESTADOS CONQUISTADOS: ${Object.keys(dbGlobal).length}`;
-    }
-
-    // 7. Reset de visualização
-    fecharPopup();
-    
-    // Força a volta para a aba mapa (segundo botão da nav)
-    const botoesNav = document.querySelectorAll('.btn-aba');
-    trocarAba('mapa', botoesNav[1]); 
 }
 
 async function atualizarConfiguracoesPerfil() {
@@ -928,10 +961,32 @@ function converter(f) {
     }
 
     // 4. FUNÇÕES DE RENDERIZAÇÃO
-function renderTimeline() {
+async function renderTimeline() {
     const lista = document.getElementById('timeline-list');
     lista.innerHTML = '';
     
+    // 1. CHECAGEM DE PRIVACIDADE
+    const isOwner = (perfilEmFoco.uid === userLogado.uid);
+    let isAmigo = false;
+    
+    if (!isOwner) {
+        // Verifica se eu sigo esse usuário (sou amigo)
+        const snapAmigo = await database.ref(`users/${userLogado.uid}/seguindo/${perfilEmFoco.uid}`).once('value');
+        isAmigo = snapAmigo.exists();
+    }
+
+    // Se for privado e não for o dono nem amigo: bloqueia
+    if (perfilEmFoco.tipo === 'privado' && !isOwner && !isAmigo) {
+        lista.innerHTML = `
+            <div style="text-align:center; padding:40px; color:var(--text-sub);">
+                <div style="font-size:40px; margin-bottom:10px;">🔒</div>
+                <p><b>Este perfil é privado</b></p>
+                <p style="font-size:12px;">Adicione @${perfilEmFoco.username} para ver suas memórias.</p>
+            </div>`;
+        return;
+    }
+
+    // 2. RENDERIZAÇÃO SEGURO
     let todasViagens = [];
     Object.keys(dbGlobal).forEach(uf => {
         Object.keys(dbGlobal[uf]).forEach(id => {
@@ -942,10 +997,8 @@ function renderTimeline() {
     todasViagens.sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
 
     todasViagens.forEach(v => {
-        let track = ''; 
-        let bullets = '';
-        
-        if(v.fotos && v.fotos.length > 0) {
+        let track = ''; let bullets = '';
+        if(v.fotos) {
             v.fotos.forEach((f, idx) => { 
                 track += `<img src="${f}" class="img-slide" style="width:100%; height:200px; object-fit:cover;">`; 
                 bullets += `<div class="bullet-tl-${v.idFirebase}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`;
@@ -964,24 +1017,16 @@ function renderTimeline() {
                     </div>
                     <span style="font-size: 10px; color: var(--text-sub);">${v.data}</span>
                 </div>
-
-                <div class="carousel-fotos" id="tl-car-${v.idFirebase}" style="height:200px; position:relative; border-radius: 15px;" 
-                     ontouchstart="hTS(event)" 
-                     ontouchmove="hTM_TL(event, '${v.idFirebase}', ${v.fotos ? v.fotos.length : 0})">
-                    <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
-                        ${track || '<div style="width:100%; height:200px; background:#eee; display:flex; align-items:center; justify-content:center;">📍 Sem fotos</div>'}
-                    </div>
-                    <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
-                        ${bullets}
-                    </div>
+                <div class="carousel-fotos" id="tl-car-${v.idFirebase}" style="height:200px; position:relative; border-radius: 15px;" ontouchstart="hTS(event)" ontouchmove="hTM_TL(event, '${v.idFirebase}', ${v.fotos ? v.fotos.length : 0})">
+                    <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">${track || '📍 Sem fotos'}</div>
+                    <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">${bullets}</div>
                 </div>
-
                 <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-size: 10px; background: #f1f5f9; padding: 4px 8px; border-radius: 8px;">R$ ${v.total.toLocaleString('pt-BR')}</span>
-                    <button onclick="removerViagem('${v.uf}', '${v.idFirebase}', '${v.cidade}')" style="background:none; border:none; font-size:14px; opacity:0.3;">🗑️</button>
+                    
+                    ${isOwner ? `<button onclick="removerViagem('${v.uf}', '${v.idFirebase}', '${v.cidade}')" style="background:none; border:none; font-size:14px; cursor:pointer;">🗑️</button>` : ''}
                 </div>
-            </div>
-        `;
+            </div>`;
         lista.appendChild(item);
     });
 }
