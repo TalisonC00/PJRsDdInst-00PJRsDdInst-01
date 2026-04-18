@@ -1176,7 +1176,61 @@ function msgRegiao(r, ok) {
 function resetarMapa() {
         if (controleMapa) { controleMapa.resetZoom(); controleMapa.center(); controleMapa.fit(); }
     }
+async function enviarNotificacao(postId, tipo, conteudo) {
+    const snapPost = await database.ref(`feed_global/${postId}`).once('value');
+    const post = snapPost.val();
+    if (!post || post.uid === userLogado.uid) return;
 
+    // Busca o perfil do dono do post para saber se é público ou privado
+    const snapDono = await database.ref(`users/${post.uid}/perfil`).once('value');
+    const perfilDono = snapDono.val();
+
+    // Verifica se já são amigos
+    const snapAmigo = await database.ref(`users/${userLogado.uid}/seguindo/${post.uid}`).once('value');
+    const saoAmigos = snapAmigo.exists();
+
+    // REGRA DE NEGÓCIO:
+    // Se for privado e NÃO forem amigos, só permite notificação se for tipo 'amizade'
+    if (perfilDono.tipo === 'privado' && !saoAmigos && tipo !== 'amizade') {
+        return; // Bloqueia a notificação de curtida/comentário
+    }
+
+    // Se passou na regra, envia:
+    database.ref(`notificacoes/${post.uid}`).push().set({
+        tipo: tipo,
+        quem: dadosUsuario.username,
+        de_uid: userLogado.uid,
+        conteudo: conteudo,
+        lido: false,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+}
+
+function escutarNotificacoes() {
+    const badge = document.getElementById('badge-notif');
+    if (!badge) return;
+
+    // O listener .on garante que se o dado sumir do banco, ele some da tela NA HORA
+    database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
+        const notifs = snap.val();
+        if (notifs) {
+            if (navigator.vibrate) navigator.vibrate(200); // Vibra por 200ms
+            // Filtra apenas as que existem e não foram lidas
+            const naoLidas = Object.values(notifs).filter(n => n && !n.lido).length;
+            
+            if (naoLidas > 0) {
+                badge.innerText = naoLidas;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        } else {
+            // Se o nó de notificações estiver vazio, limpa tudo
+            badge.style.display = 'none';
+            badge.innerText = '0';
+        }
+    });
+}
 function abrirHistorico(id) {
     // 1. Verifica Privacidade
     // Se o perfil que estamos vendo (perfilEmFoco) for privado e eu não for o dono
@@ -1330,46 +1384,6 @@ function enviarComentarioPopup(postId) {
 }
 
 // --- LÓGICA DE NOTIFICAÇÕES (O "MOTOR" DO SININHO) ---
-async function enviarNotificacao(postId, tipo, conteudo) {
-    const snapPost = await database.ref(`feedPublico/${postId}`).once('value');
-    const post = snapPost.val();
-
-    if (post && post.uid !== userLogado.uid) {
-        database.ref(`notificacoes/${post.uid}`).push().set({
-            tipo: tipo,
-            quem: dadosUsuario.username,
-            conteudo: conteudo, // emoji ou texto do comentário
-            lido: false,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-    }
-}
-
-function escutarNotificacoes() {
-    const badge = document.getElementById('badge-notif');
-    if (!badge) return;
-
-    // O listener .on garante que se o dado sumir do banco, ele some da tela NA HORA
-    database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
-        const notifs = snap.val();
-        if (notifs) {
-            if (navigator.vibrate) navigator.vibrate(200); // Vibra por 200ms
-            // Filtra apenas as que existem e não foram lidas
-            const naoLidas = Object.values(notifs).filter(n => n && !n.lido).length;
-            
-            if (naoLidas > 0) {
-                badge.innerText = naoLidas;
-                badge.style.display = 'flex';
-            } else {
-                badge.style.display = 'none';
-            }
-        } else {
-            // Se o nó de notificações estiver vazio, limpa tudo
-            badge.style.display = 'none';
-            badge.innerText = '0';
-        }
-    });
-}
         
 let sX = 0; function hTS(e) { sX = e.touches[0].clientX; }
 function hTM(e, idF, len) { 
@@ -1463,24 +1477,49 @@ async function pesquisarUsuarios(termo) {
         listaBusca.innerHTML = '';
         if (!users) { listaBusca.innerHTML = '<p style="font-size:11px; color:red; padding:10px;">Nenhum viajante encontrado.</p>'; return; }
 
-        for (let uid in users) {
-            if (uid === userLogado.uid) continue;
-            const u = users[uid].perfil;
-            const item = document.createElement('div');
-            item.style = "display:flex; align-items:center; justify-content:space-between; padding:12px; background:#f8fafc; border-radius:12px; margin-bottom:8px; border:1px solid #edf2f7;";
-            item.innerHTML = `
-                <div onclick="verPerfil('${uid}')" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
-                    <div style="width:30px; height:30px; background:var(--sky); border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>
-                    <div>
-                        <b style="font-size:13px; display:block;">@${u.username}</b>
-                        <small style="color:var(--text-sub); font-size:10px;">${u.tipo === 'publico' ? '🌍 Brasil' : '👥 Local'}</small>
-                    </div>
-                </div>
-                <button onclick="enviarSolicitacao('${uid}')" style="background:var(--primary); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">ADICIONAR</button>
-            `;
-            listaBusca.appendChild(item);
-        }
-    });
+        // Substitua o loop dentro de pesquisarUsuarios por este:
+for (let uid in users) {
+    if (uid === userLogado.uid) continue;
+    const u = users[uid].perfil;
+    
+    // 1. Verifica se já são amigos
+    const saoAmigos = dadosUsuario.seguindo && dadosUsuario.seguindo[uid];
+    
+    // 2. Verifica se há solicitação pendente (precisamos olhar no nó do alvo)
+    const snapPend = await database.ref(`notificacoes/${uid}`).orderByChild('de_uid').equalTo(userLogado.uid).once('value');
+    let pendente = false;
+    if(snapPend.exists()){
+        pendente = Object.values(snapPend.val()).some(n => n.tipo === 'amizade');
+    }
+
+    let textoBtn = "ADICIONAR";
+    let estiloBtn = "background:var(--primary);";
+    let acao = `enviarSolicitacao('${uid}')`;
+
+    if (saoAmigos) {
+        textoBtn = "AMIGOS🤝";
+        estiloBtn = "background:var(--money); cursor:default;";
+        acao = "";
+    } else if (pendente) {
+        textoBtn = "ENVIADO";
+        estiloBtn = "background:#CBD5E1; color:#64748B; cursor:default;";
+        acao = "";
+    }
+
+    const item = document.createElement('div');
+    item.style = "display:flex; align-items:center; justify-content:space-between; padding:12px; background:#f8fafc; border-radius:12px; margin-bottom:8px;";
+    item.innerHTML = `
+        <div onclick="verPerfil('${uid}')" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+            <div style="width:30px; height:30px; background:#eee; border-radius:50%; overflow:hidden;">
+                ${u.foto ? `<img src="${u.foto}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
+            </div>
+            <b style="font-size:13px;">@${u.username}</b>
+        </div>
+        <button id="btn-add-${uid}" onclick="${acao}" style="${estiloBtn} color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
+            ${textoBtn}
+        </button>
+    `;
+    listaBusca.appendChild(item);
 }
         
 // --- 2. PERFIL DETALHADO E EDIÇÃO ---
@@ -1651,25 +1690,25 @@ async function aceitarAmizade(uidAmigo, notifId) {
     const updates = {};
     const meuUid = userLogado.uid;
 
-    // 1. Cria o vínculo bidirecional (Seguindo e Seguidores)
+    // Ambos passam a se seguir (Amizade Mútua)
     updates[`users/${meuUid}/seguindo/${uidAmigo}`] = true;
-    updates[`users/${uidAmigo}/seguidores/${meuUid}`] = true;
-
-    // 2. Limpa a notificação (Deleta o registro do banco)
+    updates[`users/${uidAmigo}/seguindo/${meuUid}`] = true;
+    
+    // Limpa a notificação
     updates[`notificacoes/${meuUid}/${notifId}`] = null;
 
     try {
         await database.ref().update(updates);
-        mostrarAlerta("Agora vocês são amigos!", "🤝");
+        // Atualiza os dados locais para o botão mudar na hora sem F5
+        if(!dadosUsuario.seguindo) dadosUsuario.seguindo = {};
+        dadosUsuario.seguindo[uidAmigo] = true;
         
-        // 3. Limpeza de UI: Força a atualização da lista se estiver aberta
-        renderNotificacoes(); 
+        mostrarAlerta("Pedido aceito! Agora vocês são amigos.", "🤝");
+        renderNotificacoes();
     } catch (e) {
-        console.error("Erro ao aceitar amizade:", e);
-        mostrarAlerta("Erro ao processar solicitação.", "❌");
+        mostrarAlerta("Erro ao aceitar.", "❌");
     }
 }
-
 // --- RECUSAR / LIMPAR NOTIFICAÇÃO ---
 async function recusarNotificacao(notifId) {
     try {
