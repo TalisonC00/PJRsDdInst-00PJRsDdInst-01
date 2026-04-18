@@ -1593,7 +1593,7 @@ function renderNotificacoes() {
 
     database.ref(`notificacoes/${userLogado.uid}`).orderByChild('timestamp').limitToLast(20).on('value', snap => {
         const lista = snap.val();
-        // Limpa e mantém o título
+        
         container.innerHTML = '<div class="card"><h3 style="color:var(--primary); margin-bottom:15px;">🔔 Notificações</h3><div id="lista-real"></div></div>';
         const listaDiv = document.getElementById('lista-real');
 
@@ -1604,11 +1604,16 @@ function renderNotificacoes() {
 
         Object.keys(lista).reverse().forEach(id => {
             const n = lista[id];
+
+            // --- FILTRO ANTI-FANTASMA: Se não tiver tipo ou quem enviou, ignora ---
+            if (!n || !n.tipo || (!n.de_username && !n.quem)) return;
+
             const item = document.createElement('div');
             item.style = `padding: 15px; border-radius: 15px; background: ${n.lido ? '#fff' : '#f0f9ff'}; border: 1px solid ${n.lido ? '#eee' : 'var(--sky)'}; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;`;
 
             let msg = "";
             let acoes = "";
+            let fotoRemetente = n.de_foto || '';
 
             if (n.tipo === 'amizade') {
                 msg = `<b>@${n.de_username}</b> quer ser seu amigo.`;
@@ -1624,16 +1629,15 @@ function renderNotificacoes() {
             }
 
             item.innerHTML = `
-                <div style="width:35px; height:35px; background:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid #eee;">
-                    ${n.de_foto ? `<img src="${n.de_foto}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
+                <div style="width:35px; height:35px; background:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid #eee; flex-shrink:0;">
+                    ${fotoRemetente ? `<img src="${fotoRemetente}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
                 </div>
                 <div style="flex:1;">
-                    <span style="font-size:12px; color:var(--text-main);">${msg}</span>
+                    <span style="font-size:12px; color:var(--text-main); line-height:1.4;">${msg}</span>
                     ${acoes}
                 </div>
             `;
             
-            // Marcar como lida ao clicar na div (se não for amizade que precisa de botão)
             if (n.tipo !== 'amizade') {
                 item.onclick = () => database.ref(`notificacoes/${userLogado.uid}/${id}`).update({ lido: true });
             }
