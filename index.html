@@ -337,6 +337,7 @@ let perfilEmFoco = null;     // De QUEM é o perfil que estamos vendo na tela ag
 let cropper;
 let imagensAjustadas = []; // Array para guardar os base64 finais
 let filaDeFotos = []; // Fila de fotos originais para ajustar
+let limiteAtualFeed = 11;
     
 const REGIOES = {
         'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
@@ -386,12 +387,16 @@ async function executarAuth() {
             if(!nome || !sexo) return mostrarAlerta("Nome e Sexo são obrigatórios.", "⚠️");
 
             const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, senha);
+            const novaFoto = document.getElementById('preview-reg').src; // Pega a foto que está no preview do registro
+
             await database.ref(`users/${userCredential.user.uid}/perfil`).set({
-                nome: nome,
-                sexo: sexo,
-                tipo: tipo,
-                uid: userCredential.user.uid,
-                criadoEm: new Date().toISOString()
+                  nome: nome,
+                  sexo: sexo,
+                  tipo: tipo,
+                  username: email.split('@')[0], // Sugestão de username inicial
+                  foto: novaFoto.includes('base64') ? novaFoto : '', // Só salva se for uma imagem real
+                  uid: userCredential.user.uid,
+                  criadoEm: new Date().toISOString()
             });
             mostrarAlerta("Conta criada com sucesso", "✅");
         } else {
@@ -621,96 +626,124 @@ async function renderFeed() {
     const feedLista = document.getElementById('feed-list');
     feedLista.innerHTML = '<p style="text-align:center; padding:20px; font-size:12px;">Buscando novas aventuras...</p>';
 
-    const snapPublicos = await database.ref('feed_global').limitToLast(77).once('value');
-    const postsPublicos = snapPublicos.val() || {};
+    try {
+        // 1. Busca os posts globais (pela ordem de chegada)
+        const snapPublicos = await database.ref('feed_global').limitToLast(limiteAtualFeed).once('value');
+        const postsPublicos = snapPublicos.val() || {};
 
-    const snapSeguindo = await database.ref(`users/${userLogado.uid}/seguindo`).once('value');
-    const listaAmigos = snapSeguindo.val() ? Object.keys(snapSeguindo.val()) : [];
+        // 2. Busca amigos para incluir no feed
+        const snapSeguindo = await database.ref(`users/${userLogado.uid}/seguindo`).once('value');
+        const listaAmigos = snapSeguindo.val() ? Object.keys(snapSeguindo.val()) : [];
 
-    let postsAmigos = {};
-    for (const amigoId of listaAmigos) {
-        const snapAmigo = await database.ref(`users/${amigoId}/viagens`).limitToLast(1).once('value');
-        if (snapAmigo.exists()) {
-            const ufs = snapAmigo.val();
-            for (let uf in ufs) {
-                Object.assign(postsAmigos, ufs[uf]);
+        let postsAmigos = {};
+        for (const amigoId of listaAmigos) {
+            const snapAmigo = await database.ref(`users/${amigoId}/viagens`).limitToLast(1).once('value');
+            if (snapAmigo.exists()) {
+                const ufs = snapAmigo.val();
+                for (let uf in ufs) {
+                    Object.assign(postsAmigos, ufs[uf]);
+                }
             }
         }
-    }
 
-    const todosPosts = { ...postsPublicos, ...postsAmigos };
-    const listaOrdenada = Object.keys(todosPosts)
-        .map(id => ({...todosPosts[id], id}))
-        .reverse(); 
+        // 3. Unifica e INVERTE (Mais recente no banco = topo da lista)
+        const todosPosts = { ...postsPublicos, ...postsAmigos };
+        const listaOrdenada = Object.keys(todosPosts)
+            .map(id => ({...todosPosts[id], id}))
+            .reverse(); 
 
-    feedLista.innerHTML = '';
-    if (listaOrdenada.length === 0) {
-        feedLista.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-sub); font-size:13px;">Nenhuma viagem encontrada. Explore o Brasil! 🇧🇷</p>';
-        return;
-    }
+        feedLista.innerHTML = '';
+        
+        if (listaOrdenada.length === 0) {
+            feedLista.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-sub); font-size:13px;">Nenhuma viagem encontrada. Explore o Brasil! 🇧🇷</p>';
+            return;
+        }
 
-    listaOrdenada.forEach(post => {
-        const card = document.createElement('div');
-        card.className = 'timeline-item';
-        card.style.margin = "0 0 20px 0";
+        // 4. Renderização de cada card
+        listaOrdenada.forEach(post => {
+            const card = document.createElement('div');
+            card.className = 'timeline-item';
+            card.style.margin = "0 0 20px 0";
 
-        const isPublico = postsPublicos[post.id] ? true : false;
-        const tag = isPublico ? '🌍 BRASIL' : '👥 AMIGO';
+            const isPublico = postsPublicos[post.id] ? true : false;
+            const tag = isPublico ? '🌍 BRASIL' : '👥 AMIGO';
 
-        card.innerHTML = `
-            <div class="t-card" style="padding: 15px; border-radius: 20px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; position: relative;">
-                
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
-                    <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
-                        <div style="width:38px; height:38px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border: 1.5px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; flex-shrink:0;">
-                            ${post.fotoPerfil ? `<img src="${post.fotoPerfil}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
-                        </div>
-                        <div style="display:flex; flex-direction:column;">
-                            <b style="font-size:13px; color:var(--text-main); line-height:1.2;">@${post.username}</b>
-                            <span style="font-size:10px; color:var(--text-sub); font-weight:600;">Explorou <b>${post.cidade} - ${post.uf.replace('BR','')}</b></span>
-                        </div>
-                    </div>
-                    <span style="font-size:8px; font-weight:800; background:#f1f5f9; padding:3px 6px; border-radius:5px; color:var(--text-sub); text-transform:uppercase; letter-spacing:0.5px;">${tag}</span>
-                </div>
-
-                <div class="carousel-fotos" id="feed-car-${post.id}" 
-                     style="height:300px; position:relative; border-radius:18px; overflow:hidden; background:#f1f5f9; box-shadow:0 4px 15px rgba(0,0,0,0.03);" 
-                     ontouchstart="hTS(event)" 
-                     ontouchmove="hTM_Feed(event, '${post.id}', ${post.fotos ? post.fotos.length : 0})">
-                    <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
-                        ${post.fotos && post.fotos.length > 0 ? post.fotos.map(f => `<img src="${f}" class="img-slide" style="width:100%; height:100%; object-fit:cover;">`).join('') : '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">📍 Sem fotos registradas</div>'}
-                    </div>
-                    <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
-                        ${post.fotos && post.fotos.length > 1 ? post.fotos.map((_, idx) => `<div class="bullet-feed-${post.id}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`).join('') : ''}
-                    </div>
-                </div>
-
-                <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; gap:15px; position: relative;">
+            card.innerHTML = `
+                <div class="t-card" style="padding: 15px; border-radius: 20px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; position: relative;">
                     
-                    <div style="position:relative; display:flex; align-items:center; gap:5px;">
-                        <div id="selector-${post.id}" style="display:none; position:absolute; bottom:30px; right:0; background:white; padding:8px; border-radius:20px; box-shadow:0 5px 15px rgba(0,0,0,0.2); z-index:100; gap:10px; border:1px solid #eee; align-items:center;">
-                            <span onclick="escolherReacao('${post.id}', '❤️')" style="cursor:pointer; font-size:20px;">❤️</span>
-                            <span onclick="escolherReacao('${post.id}', '🔥')" style="cursor:pointer; font-size:20px;">🔥</span>
-                            <span onclick="escolherReacao('${post.id}', '✈️')" style="cursor:pointer; font-size:20px;">✈️</span>
-                            <span onclick="escolherReacao('${post.id}', '🧳')" style="cursor:pointer; font-size:20px;">🧳</span>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                        <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
+                            <div style="width:38px; height:38px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border: 1.5px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; flex-shrink:0;">
+                                ${post.fotoPerfil ? `<img src="${post.fotoPerfil}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
+                            </div>
+                            <div style="display:flex; flex-direction:column;">
+                                <b style="font-size:13px; color:var(--text-main); line-height:1.2;">@${post.username}</b>
+                                <span style="font-size:10px; color:var(--text-sub); font-weight:600;">Explorou <b>${post.cidade} - ${post.uf.replace('BR','')}</b></span>
+                            </div>
                         </div>
-                        
-                        <div onclick="abrirSeletorReacoes('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--text-main);">
-                            <span id="heart-${post.id}" style="font-size:18px;">🤍</span> 
-                            <small id="count-likes-${post.id}" style="font-weight:800; font-size:12px;">0</small>
+                        <span style="font-size:8px; font-weight:800; background:#f1f5f9; padding:3px 6px; border-radius:5px; color:var(--text-sub); text-transform:uppercase; letter-spacing:0.5px;">${tag}</span>
+                    </div>
+
+                    <div class="carousel-fotos" id="feed-car-${post.id}" 
+                         style="height:300px; position:relative; border-radius:18px; overflow:hidden; background:#f1f5f9; box-shadow:0 4px 15px rgba(0,0,0,0.03);" 
+                         ontouchstart="hTS(event)" 
+                         ontouchmove="hTM_Feed(event, '${post.id}', ${post.fotos ? post.fotos.length : 0})">
+                        <div class="track-fotos" style="display:flex; transition:0.4s ease-out; height:100%;">
+                            ${post.fotos && post.fotos.length > 0 ? post.fotos.map(f => `<img src="${f}" class="img-slide" style="width:100%; height:100%; object-fit:cover;">`).join('') : '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">📍 Sem fotos registradas</div>'}
+                        </div>
+                        <div style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:4px; pointer-events:none;">
+                            ${post.fotos && post.fotos.length > 1 ? post.fotos.map((_, idx) => `<div class="bullet-feed-${post.id}" style="width:5px; height:5px; border-radius:50%; background:${idx===0?'white':'rgba(255,255,255,0.4)'}; transition:0.3s;"></div>`).join('') : ''}
                         </div>
                     </div>
 
-                    <div onclick="abrirPopUpComentarios('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--text-main);">
-                        <span style="font-size:18px;">💬</span> 
-                        <small id="count-coments-${post.id}" style="font-weight:800; font-size:12px;">0</small>
+                    <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; gap:15px; position: relative;">
+                        <div style="position:relative; display:flex; align-items:center; gap:5px;">
+                            <div id="selector-${post.id}" style="display:none; position:absolute; bottom:30px; right:0; background:white; padding:8px; border-radius:20px; box-shadow:0 5px 15px rgba(0,0,0,0.2); z-index:100; gap:10px; border:1px solid #eee; align-items:center;">
+                                <span onclick="escolherReacao('${post.id}', '❤️')" style="cursor:pointer; font-size:20px;">❤️</span>
+                                <span onclick="escolherReacao('${post.id}', '🔥')" style="cursor:pointer; font-size:20px;">🔥</span>
+                                <span onclick="escolherReacao('${post.id}', '✈️')" style="cursor:pointer; font-size:20px;">✈️</span>
+                                <span onclick="escolherReacao('${post.id}', '🧳')" style="cursor:pointer; font-size:20px;">🧳</span>
+                            </div>
+                            <div onclick="abrirSeletorReacoes('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--text-main);">
+                                <span id="heart-${post.id}" style="font-size:18px;">🤍</span> 
+                                <small id="count-likes-${post.id}" style="font-weight:800; font-size:12px;">0</small>
+                            </div>
+                        </div>
+                        <div onclick="abrirPopUpComentarios('${post.id}')" style="cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--text-main);">
+                            <span style="font-size:18px;">💬</span> 
+                            <small id="count-coments-${post.id}" style="font-weight:800; font-size:12px;">0</small>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-        feedLista.appendChild(card);
-        vincularInteracoesTempoReal(post.id);
-    });
+            `;
+            feedLista.appendChild(card);
+            vincularInteracoesTempoReal(post.id);
+        }); // FECHAMENTO DO listaOrdenada.forEach
+
+        // 5. Botão "Carregar Mais"
+        const btnMais = document.createElement('button');
+        btnMais.innerHTML = "VER MAIS AVENTURAS 🌍";
+        btnMais.style = "width:calc(100% - 32px); margin:16px; padding:18px; border-radius:20px; border:none; background:white; color:var(--primary); font-weight:800; font-size:11px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.05);";
+        btnMais.onclick = () => {
+            limiteAtualFeed += 11;
+            renderFeed();
+        };
+        feedLista.appendChild(btnMais);
+
+    } catch (e) {
+        console.error("Erro no Feed:", e);
+        feedLista.innerHTML = '<p>Erro ao carregar viagens.</p>';
+    }
+} // FECHAMENTO DA FUNÇÃO renderFeed
+    // 4. BOTÃO CARREGAR MAIS (PAGINAÇÃO)
+    const btnMais = document.createElement('button');
+    btnMais.innerHTML = "CARREGAR MAIS AVENTURAS 🇧🇷";
+    btnMais.style = "width:calc(100% - 32px); margin:16px; padding:18px; border-radius:18px; border:none; background:white; color:var(--primary); font-weight:800; font-size:11px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.05);";
+    btnMais.onclick = () => {
+        limiteAtualFeed += 11;
+        renderFeed();
+    };
+    feedLista.appendChild(btnMais);
 }
 
 function abrirSeletorReacoes(postId) {
@@ -1502,6 +1535,12 @@ async function enviarSolicitacao(uidAlvo, btn) {
         }
         
         mostrarAlerta("Solicitação enviada com sucesso!", "📩");
+        // LIMPEZA PÓS-ENVIO
+        setTimeout(() => {
+            document.getElementById('resultado-busca').innerHTML = ''; // Limpa a lista embaixo
+            document.getElementById('input-busca').value = '';        // Limpa o texto digitado
+        }, 500); // Meio segundo de delay para o usuário ver o botão mudar antes de sumir
+    
     } catch (error) {
         console.error("Erro ao enviar solicitação:", error);
         mostrarAlerta("Erro ao enviar. Tente novamente.", "❌");
