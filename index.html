@@ -624,6 +624,7 @@ function mostrarProximaConquistaDaFila() {
 // 2. Nova função para Renderizar o Feed
 async function renderFeed() {
     const feedLista = document.getElementById('feed-list');
+    if (!feedLista) return;
     feedLista.innerHTML = '<p style="text-align:center; padding:20px; font-size:12px;">Buscando novas aventuras...</p>';
 
     try {
@@ -670,7 +671,6 @@ async function renderFeed() {
 
             card.innerHTML = `
                 <div class="t-card" style="padding: 15px; border-radius: 20px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; position: relative;">
-                    
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                         <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
                             <div style="width:38px; height:38px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border: 1.5px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; flex-shrink:0;">
@@ -718,9 +718,9 @@ async function renderFeed() {
             `;
             feedLista.appendChild(card);
             vincularInteracoesTempoReal(post.id);
-        }); // FECHAMENTO DO listaOrdenada.forEach
+        });
 
-        // 5. Botão "Carregar Mais"
+        // 5. Botão "Carregar Mais" único e dentro da função
         const btnMais = document.createElement('button');
         btnMais.innerHTML = "VER MAIS AVENTURAS 🌍";
         btnMais.style = "width:calc(100% - 32px); margin:16px; padding:18px; border-radius:20px; border:none; background:white; color:var(--primary); font-weight:800; font-size:11px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.05);";
@@ -732,18 +732,8 @@ async function renderFeed() {
 
     } catch (e) {
         console.error("Erro no Feed:", e);
-        feedLista.innerHTML = '<p>Erro ao carregar viagens.</p>';
+        feedLista.innerHTML = '<p style="text-align:center; padding:20px; font-size:12px;">Erro ao carregar viagens.</p>';
     }
-} // FECHAMENTO DA FUNÇÃO renderFeed
-    // 4. BOTÃO CARREGAR MAIS (PAGINAÇÃO)
-    const btnMais = document.createElement('button');
-    btnMais.innerHTML = "CARREGAR MAIS AVENTURAS 🇧🇷";
-    btnMais.style = "width:calc(100% - 32px); margin:16px; padding:18px; border-radius:18px; border:none; background:white; color:var(--primary); font-weight:800; font-size:11px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.05);";
-    btnMais.onclick = () => {
-        limiteAtualFeed += 11;
-        renderFeed();
-    };
-    feedLista.appendChild(btnMais);
 }
 
 function abrirSeletorReacoes(postId) {
