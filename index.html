@@ -1504,16 +1504,18 @@ async function pesquisarUsuarios(termo) {
     database.ref('users').orderByChild('perfil/username').startAt(query).endAt(query + '\uf8ff').limitToFirst(5).once('value', async snap => {
         const users = snap.val();
         listaBusca.innerHTML = '';
-        if (!users) { listaBusca.innerHTML = '<p style="font-size:11px; color:red; padding:10px;">Nenhum viajante encontrado.</p>'; return; }
+        if (!users) { 
+            listaBusca.innerHTML = '<p style="font-size:11px; color:red; padding:10px;">Nenhum viajante encontrado.</p>'; 
+            return; 
+        }
 
         for (let uid in users) {
             if (uid === userLogado.uid) continue;
             const u = users[uid].perfil;
             
-            // 1. Verifica se já são amigos
             const saoAmigos = dadosUsuario.seguindo && dadosUsuario.seguindo[uid];
             
-            // 2. Verifica se há solicitação pendente
+            // O ERRO ESTAVA NO AWAIT ABAIXO SEM O ASYNC NA FUNÇÃO PAI
             const snapPend = await database.ref(`notificacoes/${uid}`).orderByChild('de_uid').equalTo(userLogado.uid).once('value');
             let pendente = false;
             if(snapPend.exists()){
