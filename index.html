@@ -1503,61 +1503,62 @@ async function enviarSolicitacao(uidAlvo, btn) {
 async function pesquisarUsuarios(termo) {
     const listaBusca = document.getElementById('resultado-busca');
     const query = termo.toLowerCase().trim();
-    // LIMPEZA CRUCIAL: Se apagar o texto, limpa a div e encerra a função
+    
     if (query.length === 0) { 
         listaBusca.innerHTML = ''; 
         return; 
     }
-    if (query.length < 3) { listaBusca.innerHTML = ''; return; }
+    if (query.length < 3) return;
 
-    database.ref('users').orderByChild('perfil/username').startAt(query).endAt(query + '\uf8ff').limitToFirst(5).once('value', snap => {
+    database.ref('users').orderByChild('perfil/username').startAt(query).endAt(query + '\uf8ff').limitToFirst(5).once('value', async snap => {
         const users = snap.val();
         listaBusca.innerHTML = '';
         if (!users) { listaBusca.innerHTML = '<p style="font-size:11px; color:red; padding:10px;">Nenhum viajante encontrado.</p>'; return; }
 
-        // Substitua o loop dentro de pesquisarUsuarios por este:
-for (let uid in users) {
-    if (uid === userLogado.uid) continue;
-    const u = users[uid].perfil;
-    
-    // 1. Verifica se já são amigos
-    const saoAmigos = dadosUsuario.seguindo && dadosUsuario.seguindo[uid];
-    
-    // 2. Verifica se há solicitação pendente (precisamos olhar no nó do alvo)
-    const snapPend = await database.ref(`notificacoes/${uid}`).orderByChild('de_uid').equalTo(userLogado.uid).once('value');
-    let pendente = false;
-    if(snapPend.exists()){
-        pendente = Object.values(snapPend.val()).some(n => n.tipo === 'amizade');
-    }
+        for (let uid in users) {
+            if (uid === userLogado.uid) continue;
+            const u = users[uid].perfil;
+            
+            // 1. Verifica se já são amigos
+            const saoAmigos = dadosUsuario.seguindo && dadosUsuario.seguindo[uid];
+            
+            // 2. Verifica se há solicitação pendente
+            const snapPend = await database.ref(`notificacoes/${uid}`).orderByChild('de_uid').equalTo(userLogado.uid).once('value');
+            let pendente = false;
+            if(snapPend.exists()){
+                pendente = Object.values(snapPend.val()).some(n => n.tipo === 'amizade');
+            }
 
-    let textoBtn = "ADICIONAR";
-    let estiloBtn = "background:var(--primary);";
-    let acao = `enviarSolicitacao('${uid}')`;
+            let textoBtn = "ADICIONAR";
+            let estiloBtn = "background:var(--primary);";
+            let acao = `enviarSolicitacao('${uid}')`;
 
-    if (saoAmigos) {
-        textoBtn = "AMIGOS🤝";
-        estiloBtn = "background:var(--money); cursor:default;";
-        acao = "";
-    } else if (pendente) {
-        textoBtn = "ENVIADO";
-        estiloBtn = "background:#CBD5E1; color:#64748B; cursor:default;";
-        acao = "";
-    }
+            if (saoAmigos) {
+                textoBtn = "AMIGOS🤝";
+                estiloBtn = "background:var(--money); cursor:default;";
+                acao = "";
+            } else if (pendente) {
+                textoBtn = "ENVIADO";
+                estiloBtn = "background:#CBD5E1; color:#64748B; cursor:default;";
+                acao = "";
+            }
 
-    const item = document.createElement('div');
-    item.style = "display:flex; align-items:center; justify-content:space-between; padding:12px; background:#f8fafc; border-radius:12px; margin-bottom:8px;";
-    item.innerHTML = `
-        <div onclick="verPerfil('${uid}')" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
-            <div style="width:30px; height:30px; background:#eee; border-radius:50%; overflow:hidden;">
-                ${u.foto ? `<img src="${u.foto}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
-            </div>
-            <b style="font-size:13px;">@${u.username}</b>
-        </div>
-        <button id="btn-add-${uid}" onclick="${acao}" style="${estiloBtn} color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
-            ${textoBtn}
-        </button>
-    `;
-    listaBusca.appendChild(item);
+            const item = document.createElement('div');
+            item.style = "display:flex; align-items:center; justify-content:space-between; padding:12px; background:#f8fafc; border-radius:12px; margin-bottom:8px; border:1px solid #edf2f7;";
+            item.innerHTML = `
+                <div onclick="verPerfil('${uid}')" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+                    <div style="width:30px; height:30px; background:#eee; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                        ${u.foto ? `<img src="${u.foto}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
+                    </div>
+                    <b style="font-size:13px;">@${u.username}</b>
+                </div>
+                <button id="btn-add-${uid}" onclick="${acao}" style="${estiloBtn} color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
+                    ${textoBtn}
+                </button>
+            `;
+            listaBusca.appendChild(item);
+        }
+    });
 }
         
 // --- 2. PERFIL DETALHADO E EDIÇÃO ---
@@ -1565,12 +1566,10 @@ function abrirVisualizacaoPerfil() {
     if (!dadosUsuario) return;
     const container = document.getElementById('aba-perfil-detalhado');
     
-    // 1. CÁLCULOS PRÉ-RENDERIZAÇÃO (Garantindo que os números existam)
     const totalEstados = Object.keys(dbGlobal).length;
     const totalSeguindo = dadosUsuario.seguindo ? Object.keys(dadosUsuario.seguindo).length : 0;
     const totalSeguidores = dadosUsuario.seguidores ? Object.keys(dadosUsuario.seguidores).length : 0;
 
-    // 2. MONTAGEM DO HTML COMPLETO
     container.innerHTML = `
         <div class="card" style="text-align:center; position:relative; padding-top: 40px;">
             <button onclick="abrirMeuPerfilDetalhado()" style="position:absolute; top:20px; right:20px; background:none; border:none; font-size:20px; cursor:pointer;">⚙️</button>
@@ -1585,30 +1584,29 @@ function abrirVisualizacaoPerfil() {
             <div style="display: flex; justify-content: center; gap: 30px; margin: 20px 0; padding: 15px 0; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
                 <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguindo')">
                     <b style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguindo}</b>
-                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Seguindo</span>
+                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguindo</span>
                 </div>
                 <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguidores')">
                     <b style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguidores}</b>
-                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Seguidores</span>
+                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguidores</span>
                 </div>
                 <div style="text-align: center;">
                     <b style="display: block; font-size: 18px; color: var(--primary);">${totalEstados}</b>
-                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Estados</span>
+                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Estados</span>
                 </div>
             </div>
 
             <div style="background:#f8fafc; padding:15px; border-radius:20px; margin-bottom:25px; text-align:left;">
-                <span style="font-size:9px; font-weight:800; color:var(--text-sub); text-transform:uppercase; letter-spacing:1px;">Minha Bio</span>
-                <p style="margin:8px 0 0; font-size:14px; color:var(--text-main); line-height:1.5;">${dadosUsuario.bio || 'Explorando o Brasil...'}</p>
+                <span style="font-size:9px; font-weight:800; color:var(--text-sub); text-transform:uppercase;">Minha Bio</span>
+                <p style="margin:8px 0 0; font-size:14px; color:var(--text-main);">${dadosUsuario.bio || 'Explorando o Brasil...'}</p>
             </div>
 
             <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
                 <span class="pill" style="background:var(--sky); color:var(--text-main); padding:8px 20px; border-radius:100px; font-size:11px; font-weight:800; border:none;">
                     ${dadosUsuario.tipo === 'publico' ? '🌍 VIAJANTE BRASIL' : '🔒 VIAJANTE LOCAL'}
                 </span>
-                
                 <button onclick="firebase.auth().signOut().then(() => location.reload())" 
-                        style="background:none; color:var(--primary); font-weight:800; border:none; cursor:pointer; margin-top:10px; font-size:12px; text-decoration:none; letter-spacing:0.5px;">
+                        style="background:none; color:var(--primary); font-weight:800; border:none; cursor:pointer; margin-top:10px; font-size:12px;">
                     🚪 SAIR DA CONTA
                 </button>
             </div>
