@@ -393,7 +393,7 @@ async function executarAuth() {
                 uid: userCredential.user.uid,
                 criadoEm: new Date().toISOString()
             });
-            mostrarAlerta("Conta criada com sucesso! 🎉", "✅");
+            mostrarAlerta("Conta criada com sucesso", "✅");
         } else {
             await firebase.auth().signInWithEmailAndPassword(email, senha);
         }
@@ -1469,13 +1469,16 @@ function atualizarInterface() {
         document.getElementById('info').innerText = `ESTADOS CONQUISTADOS: ${Object.keys(dbGlobal).length}`; 
     }
 
-    // --- COLOQUE ESTAS FUNÇÕES DENTRO DO SEU SCRIPT ---
+    // --- Solicitações
 async function enviarSolicitacao(uidAlvo, btn) {
     if (!userLogado) return mostrarAlerta("Faça login para adicionar amigos", "🔒");
     
-    // Evita cliques duplicados
-    if (btn && (btn.innerText === "ENVIADO" || btn.disabled)) return;
-    if (btn) btn.disabled = true;
+    // Evita cliques duplicados enquanto processa
+    if (btn) {
+        if (btn.innerText === "ENVIADO" || btn.disabled) return;
+        btn.disabled = true;
+        btn.innerText = "⌛...";
+    }
 
     try {
         const refNotif = database.ref(`notificacoes/${uidAlvo}`).push();
@@ -1485,20 +1488,27 @@ async function enviarSolicitacao(uidAlvo, btn) {
             de_username: dadosUsuario.username,
             de_nome: dadosUsuario.nome || dadosUsuario.username,
             de_foto: dadosUsuario.foto || '',
-            lida: false,
+            lido: false, // Importante: resetar como não lida
             timestamp: firebase.database.ServerValue.TIMESTAMP
         });
         
+        // MUDANÇA VISUAL IMEDIATA
         if (btn) {
             btn.innerText = "ENVIADO";
-            btn.style.background = "#CBD5E1";
+            btn.style.background = "#CBD5E1"; // Cinza
             btn.style.color = "#64748B";
+            btn.style.cursor = "default";
+            btn.disabled = true;
         }
+        
         mostrarAlerta("Solicitação enviada com sucesso!", "📩");
     } catch (error) {
         console.error("Erro ao enviar solicitação:", error);
         mostrarAlerta("Erro ao enviar. Tente novamente.", "❌");
-        if (btn) btn.disabled = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "ADICIONAR";
+        }
     }
 }
         
@@ -1556,8 +1566,9 @@ async function pesquisarUsuarios(termo) {
                     </div>
                     <b style="font-size:13px;">@${u.username}</b>
                 </div>
-                <button id="btn-add-${uid}" onclick="${acao}" style="${estiloBtn} color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
-                    ${textoBtn}
+                // Substitua apenas a linha do button dentro do item.innerHTML:
+                <button id="btn-add-${uid}" onclick="enviarSolicitacao('${uid}', this)" style="${estiloBtn} color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
+                   ${textoBtn}
                 </button>
             `;
             listaBusca.appendChild(item);
