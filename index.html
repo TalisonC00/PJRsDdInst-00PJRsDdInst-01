@@ -646,30 +646,26 @@ async function renderFeed() {
     feedLista.innerHTML = '<p style="text-align:center; padding:20px; font-size:12px;">Buscando novas aventuras...</p>';
 
     try {
-        // 1. Busca os posts globais (pela ordem de chegada)
-        const snapPublicos = await database.ref('feed_global').limitToLast(limiteAtualFeed).once('value');
-        const postsPublicos = snapPublicos.val() || {};
+        // 1. BUSCA DADOS DO FEED GLOBAL (Agora inclui públicos e privados com trava)
+        const snapFeed = await database.ref('feed_global').limitToLast(limiteAtualFeed).once('value');
+        const todosPostsRaw = snapFeed.val() || {};
 
-        // 2. Busca amigos para incluir no feed
+        // 2. BUSCA MINHA LISTA DE AMIGOS PARA FILTRO E TAGS
         const snapSeguindo = await database.ref(`users/${userLogado.uid}/seguindo`).once('value');
-        const listaAmigos = snapSeguindo.val() ? Object.keys(snapSeguindo.val()) : [];
+        const seguindo = snapSeguindo.val() || {};
 
-        let postsAmigos = {};
-        for (const amigoId of listaAmigos) {
-            const snapAmigo = await database.ref(`users/${amigoId}/viagens`).limitToLast(1).once('value');
-            if (snapAmigo.exists()) {
-                const ufs = snapAmigo.val();
-                for (let uf in ufs) {
-                    Object.assign(postsAmigos, ufs[uf]);
-                }
-            }
-        }
-
-        // 3. Unifica e INVERTE (Mais recente no banco = topo da lista)
-        const todosPosts = { ...postsPublicos, ...postsAmigos };
-        const listaOrdenada = Object.keys(todosPosts)
-            .map(id => ({...todosPosts[id], id}))
-            .reverse(); 
+        // 3. PREPARAÇÃO E FILTRAGEM
+        const listaOrdenada = Object.keys(todosPostsRaw)
+            .map(id => ({...todosPostsRaw[id], id}))
+            .filter(post => {
+                const souDono = post.uid === userLogado.uid;
+                const souAmigo = seguindo[post.uid] ? true : false;
+                
+                // Se o post for privado, só mostramos se eu for o dono ou amigo
+                if (post.privado && !souDono && !souAmigo) return false;
+                return true;
+            })
+            .reverse(); // Ordem de chegada
 
         feedLista.innerHTML = '';
         
@@ -678,27 +674,23 @@ async function renderFeed() {
             return;
         }
 
-        // 4. Renderização de cada card
+        // 4. RENDERIZAÇÃO COM TAG INTELIGENTE
         listaOrdenada.forEach(post => {
-            // REGRA DE OURO: Se o post é privado e eu não sou o dono nem amigo, eu pulo (não renderizo)
-             const souDono = post.uid === userLogado.uid;
-             const souAmigo = dadosUsuario.seguindo && dadosUsuario.seguindo[post.uid];
-    
-             if (post.privado && !souDono && !souAmigo) {
-             return; // Ignora este post e vai para o próximo
-             }
             const card = document.createElement('div');
             card.className = 'timeline-item';
             card.style.margin = "0 0 20px 0";
 
-            const isPublico = postsPublicos[post.id] ? true : false;
-            const tag = isPublico ? '🌍 BRASIL' : '👥 AMIGO';
+            // LÓGICA DA TAG CORRIGIDA:
+            // Se eu sigo o autor do post, a tag é AMIGO. Senão, é BRASIL.
+            const souAmigo = seguindo[post.uid] ? true : false;
+            const tag = souAmigo ? '👥 AMIGO' : '🌍 BRASIL';
+            const corTag = souAmigo ? 'var(--money)' : 'var(--primary)';
 
             card.innerHTML = `
-                <div class="t-card" style="padding: 15px; border-radius: 20px; border-left: 4px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; position: relative;">
+                <div class="t-card" style="padding: 15px; border-radius: 20px; border-left: 4px solid ${corTag}; position: relative;">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                         <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="verPerfil('${post.uid}')">
-                            <div style="width:38px; height:38px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border: 1.5px solid ${isPublico ? 'var(--primary)' : 'var(--money)'}; flex-shrink:0;">
+                            <div style="width:38px; height:38px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; border: 1.5px solid ${corTag}; flex-shrink:0;">
                                 ${post.fotoPerfil ? `<img src="${post.fotoPerfil}" style="width:100%; height:100%; object-fit:cover;">` : '👤'}
                             </div>
                             <div style="display:flex; flex-direction:column;">
@@ -745,7 +737,7 @@ async function renderFeed() {
             vincularInteracoesTempoReal(post.id);
         });
 
-        // 5. Botão "Carregar Mais" único e dentro da função
+        // 5. BOTÃO CARREGAR MAIS
         const btnMais = document.createElement('button');
         btnMais.innerHTML = "VER MAIS AVENTURAS 🌍";
         btnMais.style = "width:calc(100% - 32px); margin:16px; padding:18px; border-radius:20px; border:none; background:white; color:var(--primary); font-weight:800; font-size:11px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.05);";
