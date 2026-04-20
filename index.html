@@ -1329,24 +1329,32 @@ function escutarNotificacoes() {
     });
 }
         
-function abrirHistorico(id) {
-    // 1. Verifica Privacidade
-    // Se o perfil que estamos vendo (perfilEmFoco) for privado e eu não for o dono
-    const isOwner = userLogado && (perfilEmFoco.uid === userLogado.uid);
-    const isFriend = false; // Lógica de amigos será implementada depois
+async function abrirHistorico(id) {
+    // 1. Identifica quem é o dono deste mapa
+    const uidAlvo = perfilEmFoco ? perfilEmFoco.uid : userLogado.uid;
+    const isOwner = (uidAlvo === userLogado.uid);
+    
+    // 2. Checagem de Amizade (Estilo Instagram/Privado)
+    let souAmigo = false;
+    if (!isOwner) {
+        // Verifica se eu sigo esse usuário (se ele está na minha lista de seguindo)
+        const snapAmigo = await database.ref(`users/${userLogado.uid}/seguindo/${uidAlvo}`).once('value');
+        souAmigo = snapAmigo.exists();
+    }
 
-    if (perfilEmFoco.tipo === 'privado' && !isOwner && !isFriend) {
-        mostrarAlerta("Perfil Privado: Adicione para ver as memórias", "🔒");
+    // 3. REGRA DE PRIVACIDADE: Bloqueia se for privado e não for dono nem amigo
+    if (perfilEmFoco && perfilEmFoco.tipo === 'privado' && !isOwner && !souAmigo) {
+        mostrarAlerta("Este mapa é privado. Siga @"+perfilEmFoco.username+" para ver as fotos!", "🔒");
         return; 
     }
 
-    // 2. Renderização Original do Pop-up (Mantida como você pediu)
-const listaObj = dbGlobal[id]; 
-if (!listaObj) return;
+    // 4. Renderização do Pop-up (Se passou na segurança)
+    const listaObj = dbGlobal[id]; 
+    if (!listaObj) return;
 
-let h = `<h2 style="color:var(--primary); margin:0 0 15px 10px; font-size:20px; font-weight:800;">🚩 ${id.replace('BR','')}</h2>`;
+    let h = `<h2 style="color:var(--primary); margin:0 0 15px 10px; font-size:20px; font-weight:800;">🚩 ${id.replace('BR','')}</h2>`;
     
-Object.keys(listaObj).forEach((idFirebase) => {
+    Object.keys(listaObj).forEach((idFirebase) => {
         const v = listaObj[idFirebase];
         let track = ''; let bullets = '';
         if(v.fotos) {
