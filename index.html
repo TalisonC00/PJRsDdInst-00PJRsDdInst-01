@@ -357,6 +357,8 @@ let imagensAjustadas = []; // Array para guardar os base64 finais
 let filaDeFotos = []; // Fila de fotos originais para ajustar
 let limiteAtualFeed = 11;
 let listenerPerfilAtivo = null;
+let listenerSeguidoresAtivo = null;
+let listenerSeguindoAtivo = null;
     
 const REGIOES = {
         'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
@@ -486,12 +488,12 @@ async function salvarPerfilFinal() {
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
 async function verPerfil(uidAlvo) {
     try {
-        // 1. LIMPEZA DE MEMÓRIA: Se já havia um vigia em outro perfil, desliga ele
-        if (listenerPerfilAtivo) {
-            listenerPerfilAtivo.off();
-        }
+        // 1. LIMPEZA DE MEMÓRIA: Desliga ouvintes antigos para evitar conflitos e lentidão
+        if (listenerPerfilAtivo) listenerPerfilAtivo.off();
+        if (listenerSeguidoresAtivo) listenerSeguidoresAtivo.off();
+        if (listenerSeguindoAtivo) listenerSeguindoAtivo.off();
 
-        // 2. DEFINE O NOVO VIGIA (Listener em tempo real)
+        // 2. DEFINE O NOVO VIGIA DO PERFIL (Nome, Bio, Foto)
         listenerPerfilAtivo = database.ref(`users/${uidAlvo}/perfil`);
 
         listenerPerfilAtivo.on('value', async (snap) => {
@@ -502,66 +504,69 @@ async function verPerfil(uidAlvo) {
                 return;
             }
 
-            // 3. ATUALIZA O ESTADO GLOBAL DE FOCO
+            // ATUALIZA O ESTADO GLOBAL DE FOCO
             perfilEmFoco = { uid: uidAlvo, ...dadosAlvo };
             const isOwner = (uidAlvo === userLogado.uid);
 
-            // 4. BUSCA AS VIAGENS PARA MAPA E TIMELINE
-            const snapViagens = await database.ref(`users/${uidAlvo}/viagens`).once('value');
-            dbGlobal = snapViagens.val() || {}; 
+            // 3. VIGIA SEGUIDORES E SEGUINDO EM TEMPO REAL
+            // Usamos .on aqui para que o número mude NO SEGUNDO que alguém clica no botão
+            listenerSeguidoresAtivo = database.ref(`users/${uidAlvo}/seguidores`);
+            listenerSeguidoresAtivo.on('value', (sSnap) => {
+                const totalSeguidores = sSnap.val() ? Object.keys(sSnap.val()).length : 0;
 
-            // 5. ATUALIZA OS CONTADORES (SEGUIDORES/SEGUINDO/ESTADOS)
-            // Buscamos os números reais no banco para garantir precisão
-            const seguidoresSnap = await database.ref(`users/${uidAlvo}/seguidores`).once('value');
-            const seguindoSnap = await database.ref(`users/${uidAlvo}/seguindo`).once('value');
-            
-            const totalSeguidores = seguidoresSnap.val() ? Object.keys(seguidoresSnap.val()).length : 0;
-            const totalSeguindo = seguindoSnap.val() ? Object.keys(seguindoSnap.val()).length : 0;
-            const totalEstados = Object.keys(dbGlobal).length;
+                listenerSeguindoAtivo = database.ref(`users/${uidAlvo}/seguindo`);
+                listenerSeguindoAtivo.on('value', (sgSnap) => {
+                    const totalSeguindo = sgSnap.val() ? Object.keys(sgSnap.val()).length : 0;
 
-            // 6. ATUALIZA A IDENTIDADE VISUAL DO HEADER
-            const userBadge = document.getElementById('user-badge');
-            const elRealName = document.getElementById('user-real-name-header');
-            const elInfo = document.getElementById('info');
-            
-            if (userBadge) userBadge.innerText = `@${dadosAlvo.username}`;
-            if (elRealName) elRealName.innerText = dadosAlvo.nome || "Viajante";
+                    // 4. BUSCA AS VIAGENS (Estados conquistados)
+                    database.ref(`users/${uidAlvo}/viagens`).on('value', (vSnap) => {
+                        const viagens = vSnap.val() || {};
+                        const totalEstados = Object.keys(viagens).length;
 
-            if (!isOwner) {
-                elInfo.innerHTML = `VISITANDO PERFIL <button onclick="verPerfil(userLogado.uid)" style="font-size:8px; background:var(--primary); color:white; border:none; border-radius:5px; padding:2px 5px; margin-left:5px; cursor:pointer; font-weight:800;">VER MEU MAPA</button>`;
-            } else {
-                elInfo.innerText = `${totalEstados} ${totalEstados === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}`;
-            }
+                        // Se estivermos visitando, o dbGlobal precisa ser o do alvo para pintar o mapa dele
+                        if (!isOwner) dbGlobal = viagens;
 
-            // 7. ATUALIZA A FOTO NO HEADER
-            const elImg = document.getElementById('img-perfil-header');
-            const elEmoji = document.getElementById('emoji-perfil-header');
-            if (dadosAlvo.foto && elImg) {
-                elImg.src = dadosAlvo.foto;
-                elImg.style.display = "block";
-                if(elEmoji) elEmoji.style.display = "none";
-            } else if (elEmoji) {
-                if(elImg) elImg.style.display = "none";
-                elEmoji.style.display = "block";
-            }
+                        // 5. ATUALIZA A IDENTIDADE VISUAL DO HEADER (IDENTIDADE FIXA)
+                        document.getElementById('user-badge').innerText = `@${dadosAlvo.username}`;
+                        document.getElementById('user-real-name-header').innerText = dadosAlvo.nome || "Viajante";
 
-            // 8. RENDERIZAÇÃO DOS COMPONENTES (Mapa, Timeline, Conquistas)
-            atualizarInterface(); // Pinta o mapa do alvo
-            renderTimeline();     // Monta a timeline do alvo
-            renderJornada();      // Monta as conquistas do alvo
+                        const elImg = document.getElementById('img-perfil-header');
+                        const elEmoji = document.getElementById('emoji-perfil-header');
+                        if (dadosAlvo.foto && elImg) {
+                            elImg.src = dadosAlvo.foto;
+                            elImg.style.display = "block";
+                            if (elEmoji) elEmoji.style.display = "none";
+                        } else if (elEmoji) {
+                            if (elImg) elImg.style.display = "none";
+                            elEmoji.style.display = "block";
+                        }
 
-            // 9. ATUALIZA A ABA DE PERFIL DETALHADO (Se o usuário clicar nela)
-            // Passamos os dados fresquinhos para a função que monta o HTML do perfil
-            abrirVisualizacaoPerfil(perfilEmFoco, totalSeguidores, totalSeguindo, totalEstados);
+                        if (!isOwner) {
+                            document.getElementById('info').innerHTML = `VISITANDO PERFIL <button onclick="verPerfil(userLogado.uid)" style="font-size:8px; background:var(--primary); color:white; border:none; border-radius:5px; padding:2px 5px; margin-left:5px; cursor:pointer; font-weight:800;">VER MEU MAPA</button>`;
+                        } else {
+                            document.getElementById('info').innerText = `${totalEstados} ${totalEstados === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}`;
+                        }
+
+                        // 6. RE-RENDERIZA OS COMPONENTES VISUAIS
+                        atualizarInterface(); // Pinta o mapa
+                        renderTimeline();     // Monta a linha do tempo
+                        renderJornada();      // Atualiza troféus
+
+                        // 7. ATUALIZA A ABA DE PERFIL DETALHADO (A VITRINE)
+                        // Passamos os números reais e fresquinhos para a função de desenho
+                        abrirVisualizacaoPerfil(perfilEmFoco, totalSeguidores, totalSeguindo, totalEstados);
+                    });
+                });
+            });
         });
 
-        // 10. NAVEGAÇÃO AUTOMÁTICA
+        // 8. NAVEGAÇÃO E LIMPEZA INICIAL
         fecharPopup();
         const botoesNav = document.querySelectorAll('.btn-aba');
-        trocarAba('mapa', botoesNav[1]); 
+        trocarAba('mapa', botoesNav[1]); // Joga o usuário no mapa do alvo
 
     } catch (error) {
-        console.error("Erro ao carregar perfil:", error);
+        console.error("Erro crítico ao carregar perfil:", error);
         mostrarAlerta("Erro ao visitar perfil.", "❌");
     }
 }
@@ -1695,18 +1700,12 @@ async function pesquisarUsuarios(termo) {
 }
         
 // --- 2. PERFIL DETALHADO E EDIÇÃO ---
-function abrirVisualizacaoPerfil() {
-    // Usamos o perfilEmFoco (quem estamos visitando) ou dadosUsuario (nós mesmos) como reserva
-    const alvo = perfilEmFoco || dadosUsuario;
+function abrirVisualizacaoPerfil(alvo, nSeguidores, nSeguindo, nEstados) {
+    // Usamos o alvo passado por argumento (que vem do ouvinte em tempo real)
     if (!alvo) return;
 
     const container = document.getElementById('aba-perfil-detalhado');
     const isOwner = (alvo.uid === userLogado.uid);
-
-    // Cálculo dinâmico baseado no perfil que está sendo exibido
-    const totalEstados = dbGlobal ? Object.keys(dbGlobal).length : 0;
-    const totalSeguindo = alvo.seguindo ? Object.keys(alvo.seguindo).length : 0;
-    const totalSeguidores = alvo.seguidores ? Object.keys(alvo.seguidores).length : 0;
 
     container.innerHTML = `
         <div class="card" style="text-align:center; position:relative; padding-top: 40px;">
@@ -1720,18 +1719,18 @@ function abrirVisualizacaoPerfil() {
             <p style="margin:2px 0 15px; color:var(--primary); font-weight:700; font-size:15px;">@${alvo.username}</p>
             
             <div style="display: flex; justify-content: center; gap: 30px; margin: 20px 0; padding: 15px 0; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
-              <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguindo')">
-                 <b id="count-seguindo" style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguindo}</b>
-                 <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguindo</span>
-               </div>
-               <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguidores')">
-                 <b id="count-seguidores" style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguidores}</b>
-                 <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguidores</span>
-               </div>
-               <div style="text-align: center;">
-                 <b style="display: block; font-size: 18px; color: var(--primary);">${totalEstados}</b>
-                 <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Estados</span>
-               </div>
+                <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguindo')">
+                    <b id="count-seguindo" style="display: block; font-size: 18px; color: var(--text-main);">${nSeguindo}</b>
+                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguindo</span>
+                </div>
+                <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguidores')">
+                    <b id="count-seguidores" style="display: block; font-size: 18px; color: var(--text-main);">${nSeguidores}</b>
+                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguidores</span>
+                </div>
+                <div style="text-align: center;">
+                    <b style="display: block; font-size: 18px; color: var(--primary);">${nEstados}</b>
+                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Estados</span>
+                </div>
             </div>
 
             <div style="background:#f8fafc; padding:15px; border-radius:20px; margin-bottom:25px; text-align:left;">
@@ -1747,12 +1746,12 @@ function abrirVisualizacaoPerfil() {
                 ${isOwner ? `
                     <button onclick="firebase.auth().signOut().then(() => location.reload())" 
                             style="background:none; color:var(--primary); font-weight:800; border:none; cursor:pointer; margin-top:10px; font-size:12px;">
-                         SAIR DA CONTA
+                        SAIR DA CONTA
                     </button>
                 ` : `
                     <button onclick="verPerfil(userLogado.uid)" 
                             style="background:var(--primary); color:white; font-weight:800; border:none; cursor:pointer; padding:10px 20px; border-radius:12px; margin-top:10px; font-size:11px;">
-                        🏠 VOLTAR AO MEU PERFIL
+                          VOLTAR AO MEU PERFIL
                     </button>
                 `}
             </div>
@@ -2101,68 +2100,20 @@ function toggleAuthMode() {
 
 // Inicialização correta do App
 function initApp(perfil) {
-    // 1. Definição de variáveis de estado global
+    // 1. Definição de variáveis de estado global para o dono do celular
     dadosUsuario = perfil;
-    perfilEmFoco = perfil; // No início, o foco é o próprio usuário
     
-    // 2. Atualização da Identidade no Header (Invertido: Nome em cima, @ embaixo)
-    const elBadge = document.getElementById('user-badge');
-    const elRealName = document.getElementById('user-real-name-header');
-    const elImg = document.getElementById('img-perfil-header');
-    const elEmoji = document.getElementById('emoji-perfil-header');
-
-    if(elRealName) elRealName.innerText = perfil.nome || "Viajante";
-    if(elBadge) elBadge.innerText = `@${perfil.username}`;
-
-    // 3. Atualização da Foto de Perfil no Header
-    if (perfil.foto && elImg) {
-        elImg.src = perfil.foto;
-        elImg.style.display = "block";
-        if(elEmoji) elEmoji.style.display = "none";
-    } else if (elEmoji) {
-        if(elImg) elImg.style.display = "none";
-        elEmoji.style.display = "block";
-    }
-
-    // DENTRO DA FUNÇÃO initApp(perfil):
-    // Fica vigiando QUEM EU SIGO para atualizar os botões e números na hora
-    database.ref(`users/${userLogado.uid}/seguindo`).on('value', snap => {
-        dadosUsuario.seguindo = snap.val() || {};
-    // Atualiza o contador na tela de perfil se ela estiver aberta
-        const el = document.getElementById('count-seguindo');
-        if (el) el.innerText = Object.keys(dadosUsuario.seguindo).length;
-    });
-
-// Fica vigiando MEUS SEGUIDORES
-    database.ref(`users/${userLogado.uid}/seguidores`).on('value', snap => {
-        dadosUsuario.seguidores = snap.val() || {};
-        const el = document.getElementById('count-seguidores');
-        if (el) el.innerText = Object.keys(dadosUsuario.seguidores).length;
-    });
-    // 4. Ativação dos "Escutadores" (Listeners) em Tempo Real
-    
-    // Escuta Notificações (Sininho: Curtidas, Comentários e Amizades)
+    // 2. Escuta Notificações (Sininho)
     escutarNotificacoes(); 
 
-    // Escuta Viagens (Atualiza Mapa, Timeline, Gastos e Conquistas automaticamente)
+    // 3. ATIVAÇÃO DO MOTOR REATIVO
+    // O verPerfil do próprio usuário ativa todos os ouvintes (.on) de seguidores e seguindo
+    verPerfil(userLogado.uid);
+    
+    // 4. Escuta Viagens especificamente para disparar o sistema de troféus/celebracao
+    // (As outras renderizações de viagem são cuidadas dentro da verPerfil agora)
     database.ref(`users/${userLogado.uid}/viagens`).on('value', (snapshot) => {
-        dbGlobal = snapshot.val() || {};
-        
-        // Atualiza a interface macro
-        atualizarInterface(); 
-        
-        // Atualiza o contador de estados no Header (Linha abaixo do nome da rede)
-        const elInfo = document.getElementById('info');
-        if (elInfo) {
-            const total = Object.keys(dbGlobal).length;
-            elInfo.innerText = `${total} ${total === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}`;
-        }
-
-        // Renderiza os componentes visuais
-        verificarNovasConquistas(); 
-        renderTimeline();
-        renderGastos();
-        renderJornada();
+        verificarNovasConquistas();
     });
 
     // 5. Inicialização do Mapa SVG
