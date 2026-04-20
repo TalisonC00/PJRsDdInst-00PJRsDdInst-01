@@ -490,27 +490,37 @@ async function verPerfil(uidAlvo) {
         }
 
         // 2. ATUALIZA O ESTADO GLOBAL DE FOCO
-        // Isso é o que as funções renderTimeline e abrirHistorico usam para segurança
         perfilEmFoco = dadosAlvo;
         const isOwner = (uidAlvo === userLogado.uid);
 
-        // 3. Busca as viagens desse usuário específico
+        // 3. Busca as viagens desse usuário específico para o Mapa e Timeline
         const snapViagens = await database.ref(`users/${uidAlvo}/viagens`).once('value');
         dbGlobal = snapViagens.val() || {}; 
 
-        // 4. Controle de Interface (Menu de Navegação)
-        // Se não for o dono, escondemos abas de edição e gastos privados
+        // 4. ESCUTADORES EM TEMPO REAL (NÚMEROS ESTILO INSTAGRAM)
+        // Isso garante que se alguém começar a seguir enquanto você olha o perfil, o número muda sozinho
+        database.ref(`users/${uidAlvo}/seguidores`).on('value', snap => {
+            const count = snap.val() ? Object.keys(snap.val()).length : 0;
+            const el = document.getElementById('count-seguidores');
+            if (el) el.innerText = count;
+        });
+
+        database.ref(`users/${uidAlvo}/seguindo`).on('value', snap => {
+            const count = snap.val() ? Object.keys(snap.val()).length : 0;
+            const el = document.getElementById('count-seguindo');
+            if (el) el.innerText = count;
+        });
+
+        // 5. Controle de Interface (Menu de Navegação)
         const btnRegistro = document.getElementById('btn-nav-registro');
         const btnGastos = document.getElementById('btn-nav-gastos');
         const btnHome = document.getElementById('btn-nav-home');
 
         if (btnRegistro) btnRegistro.style.display = isOwner ? "block" : "none";
         if (btnGastos) btnGastos.style.display = isOwner ? "block" : "none";
-        
-        // Se estiver visitando outra pessoa, mostra um botão "🏠" ou volta para o meu perfil
         if (btnHome) btnHome.style.display = isOwner ? "none" : "block";
 
-        // 5. Atualiza a Identidade Visual do Header
+        // 6. Atualiza a Identidade Visual do Header
         const userBadge = document.getElementById('user-badge');
         const elRealName = document.getElementById('user-real-name-header');
         const elInfo = document.getElementById('info');
@@ -525,7 +535,7 @@ async function verPerfil(uidAlvo) {
             elInfo.innerText = `${total} ${total === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}`;
         }
 
-        // 6. Atualiza a Foto no Header (mostra a foto de quem você está visitando)
+        // 7. Atualiza a Foto no Header
         const elImg = document.getElementById('img-perfil-header');
         const elEmoji = document.getElementById('emoji-perfil-header');
         if (dadosAlvo.foto && elImg) {
@@ -537,19 +547,13 @@ async function verPerfil(uidAlvo) {
             elEmoji.style.display = "block";
         }
 
-        // 7. RESET DE VISUALIZAÇÃO E RENDERIZAÇÃO SEGURA
+        // 8. RESET DE VISUALIZAÇÃO E RENDERIZAÇÃO SEGURA
         fecharPopup();
-        
-        // Pinta o mapa conforme os estados do usuário visitado
-        atualizarInterface(); 
-        
-        // Renderiza a timeline (ela agora tem as travas de isOwner e perfilPrivado)
-        renderTimeline(); 
-        
-        // Se tiver aba de conquistas/jornada, renderiza também
-        renderJornada();
+        atualizarInterface(); // Pinta o mapa do alvo
+        renderTimeline();     // Monta a timeline do alvo
+        renderJornada();      // Monta as conquistas do alvo
 
-        // 8. Força a navegação para a aba Mapa para o usuário ver o progresso do alvo
+        // 9. Navega automaticamente para a aba Mapa para ver o progresso
         const botoesNav = document.querySelectorAll('.btn-aba');
         trocarAba('mapa', botoesNav[1]); 
 
@@ -558,7 +562,7 @@ async function verPerfil(uidAlvo) {
         mostrarAlerta("Erro ao visitar perfil.", "❌");
     }
 }
-
+        
 async function atualizarConfiguracoesPerfil() {
     const novoTipo = document.getElementById('edit-tipo').value;
     const user = userLogado.uid;
@@ -1630,19 +1634,19 @@ function abrirVisualizacaoPerfil() {
             <p style="margin:2px 0 15px; color:var(--primary); font-weight:700; font-size:15px;">@${alvo.username}</p>
             
             <div style="display: flex; justify-content: center; gap: 30px; margin: 20px 0; padding: 15px 0; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
-                <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguindo')">
-                    <b style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguindo}</b>
-                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguindo</span>
-                </div>
-                <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguidores')">
-                    <b style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguidores}</b>
-                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguidores</span>
-                </div>
-                <div style="text-align: center;">
-                    <b style="display: block; font-size: 18px; color: var(--primary);">${totalEstados}</b>
-                    <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Estados</span>
-                </div>
+               <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguindo')">
+                <b id="count-seguindo" style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguindo}</b>
+             <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguindo</span>
             </div>
+            <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguidores')">
+                <b id="count-seguidores" style="display: block; font-size: 18px; color: var(--text-main);">${totalSeguidores}</b>
+                <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Seguidores</span>
+             </div>
+             <div style="text-align: center;">
+                <b style="display: block; font-size: 18px; color: var(--primary);">${totalEstados}</b>
+                <span style="font-size: 9px; color: var(--text-sub); font-weight: 800; text-transform: uppercase;">Estados</span>
+             </div>
+             </div>
 
             <div style="background:#f8fafc; padding:15px; border-radius:20px; margin-bottom:25px; text-align:left;">
                 <span style="font-size:9px; font-weight:800; color:var(--text-sub); text-transform:uppercase;">Bio</span>
@@ -1791,34 +1795,28 @@ function renderNotificacoes() {
     });
 }
 // --- ACEITAR AMIZADE ---
-async function aceitarAmizade(uidAmigo, notifId) {
-    const updates = {};
+async function aceitarAmizade(uidRemetente, notifId) {
     const meuUid = userLogado.uid;
+    const updates = {};
 
-    // 1. Eu sigo ele e ele me segue
-    updates[`users/${meuUid}/seguindo/${uidAmigo}`] = true;
-    updates[`users/${uidAmigo}/seguidores/${meuUid}`] = true;
-
-    // 2. Ele me segue e eu sigo ele (Amizade Mútua Completa)
-    updates[`users/${uidAmigo}/seguindo/${meuUid}`] = true;
-    updates[`users/${meuUid}/seguidores/${uidAmigo}`] = true;
+    // 1. O remetente (quem pediu) passa a me seguir
+    updates[`users/${uidRemetente}/seguindo/${meuUid}`] = true;
     
-    // 3. Limpa a notificação
+    // 2. Eu ganho um novo seguidor
+    updates[`users/${meuUid}/seguidores/${uidRemetente}`] = true;
+
+    // 3. Limpa a notificação processada
     updates[`notificacoes/${meuUid}/${notifId}`] = null;
 
     try {
         await database.ref().update(updates);
+        mostrarAlerta("Novo seguidor adicionado", "✅");
         
-        // Atualiza localmente para refletir nos contadores sem dar F5
-        if(!dadosUsuario.seguindo) dadosUsuario.seguindo = {};
-        if(!dadosUsuario.seguidores) dadosUsuario.seguidores = {};
-        dadosUsuario.seguindo[uidAmigo] = true;
-        dadosUsuario.seguidores[uidAmigo] = true;
-        
-        mostrarAlerta("Agora vocês são amigos", "🤝");
-        abrirVisualizacaoPerfil(); // Recarrega a tela de perfil para atualizar os números
+        // Força a atualização da tela de perfil se ela estiver aberta
+        if (perfilEmFoco) verPerfil(perfilEmFoco.uid);
     } catch (e) {
-        mostrarAlerta("Erro ao processar amizade.", "❌");
+        console.error("Erro ao seguir:", e);
+        mostrarAlerta("Erro ao processar.", "❌");
     }
 }
 // --- RECUSAR / LIMPAR NOTIFICAÇÃO ---
