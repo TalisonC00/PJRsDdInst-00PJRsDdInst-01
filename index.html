@@ -1530,34 +1530,71 @@ function atualizarInterface() {
     // --- Solicitações
 async function enviarSolicitacao(uidAlvo, btn) {
     if (!userLogado) return mostrarAlerta("Faça login para adicionar amigos", "🔒");
-    if (btn && (btn.innerText === "ENVIADO" || btn.disabled)) return;
+    if (!uidAlvo || uidAlvo === userLogado.uid) return;
+
+    // 1. BLOQUEIO DE SEGURANÇA: Evita processar se já for amigo ou se o botão já estiver em estado de espera
+    if (dadosUsuario.seguindo && dadosUsuario.seguindo[uidAlvo]) {
+        return mostrarAlerta("Você já segue este viajante!", "✅");
+    }
+    if (btn && (btn.innerText === "ENVIADO" || btn.innerText === "⌛..." || btn.disabled)) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "⌛...";
+    }
 
     try {
         const snapAlvo = await database.ref(`users/${uidAlvo}/perfil`).once('value');
         const perfilAlvo = snapAlvo.val();
 
+        if (!perfilAlvo) throw new Error("Perfil não encontrado");
+
         if (perfilAlvo.tipo === 'publico') {
-            // SE FOR PÚBLICO: Segue direto (Estilo Instagram)
+            // --- CENÁRIO A: PERFIL PÚBLICO (Segue Direto) ---
             const updates = {};
             updates[`users/${userLogado.uid}/seguindo/${uidAlvo}`] = true;
             updates[`users/${uidAlvo}/seguidores/${userLogado.uid}`] = true;
+            
             await database.ref().update(updates);
             
-            // Atualiza localmente para o contador mudar sem F5
-            if(!dadosUsuario.seguindo) dadosUsuario.seguindo = {};
+            // Atualiza memória local para o app saber que agora somos amigos
+            if (!dadosUsuario.seguindo) dadosUsuario.seguindo = {};
             dadosUsuario.seguindo[uidAlvo] = true;
 
             if (btn) {
                 btn.innerText = "SEGUINDO";
                 btn.style.background = "var(--money)";
+                btn.disabled = true;
             }
+
+            // ATUALIZAÇÃO VISUAL DOS NÚMEROS (Sem F5)
+            atualizarContadoresLocalmente(uidAlvo);
+            
             mostrarAlerta("Agora você segue @" + perfilAlvo.username, "✅");
+
         } else {
-            // SE FOR PRIVADO: Envia solicitação
+            // --- CENÁRIO B: PERFIL PRIVADO (Envia Solicitação) ---
+            
+            // Verifica se já existe uma notificação pendente para não duplicar no banco
+            const snapCheck = await database.ref(`notificacoes/${uidAlvo}`).orderByChild('de_uid').equalTo(userLogado.uid).once('value');
+            let jaExiste = false;
+            if (snapCheck.exists()) {
+                jaExiste = Object.values(snapCheck.val()).some(n => n.tipo === 'amizade');
+            }
+
+            if (jaExiste) {
+                if (btn) {
+                    btn.innerText = "ENVIADO";
+                    btn.style.background = "#CBD5E1";
+                }
+                return mostrarAlerta("Solicitação já está pendente.", "⏳");
+            }
+
             await database.ref(`notificacoes/${uidAlvo}`).push().set({
                 tipo: 'amizade',
                 de_uid: userLogado.uid,
                 de_username: dadosUsuario.username,
+                de_nome: dadosUsuario.nome || dadosUsuario.username,
                 de_foto: dadosUsuario.foto || '',
                 lido: false,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -1566,19 +1603,45 @@ async function enviarSolicitacao(uidAlvo, btn) {
             if (btn) {
                 btn.innerText = "ENVIADO";
                 btn.style.background = "#CBD5E1";
+                btn.style.color = "#64748B";
+                btn.disabled = true;
             }
-            mostrarAlerta("Solicitação enviada!", "📩");
+            mostrarAlerta("Solicitação de amizade enviada!", "📩");
         }
         
-        // Limpa busca após 1 segundo
+        // Limpa a busca após o sucesso para não entulhar a tela
         setTimeout(() => {
-            document.getElementById('resultado-busca').innerHTML = '';
-            document.getElementById('input-busca').value = '';
-        }, 1000);
+            const resBusca = document.getElementById('resultado-busca');
+            const inpBusca = document.getElementById('input-busca');
+            if (resBusca) resBusca.innerHTML = '';
+            if (inpBusca) inpBusca.value = '';
+        }, 1200);
 
     } catch (error) {
-        console.error("Erro:", error);
-        mostrarAlerta("Erro ao processar ação.", "❌");
+        console.error("Erro na solicitação:", error);
+        mostrarAlerta("Erro ao processar ação. Tente novamente.", "❌");
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "SEGUIR";
+        }
+    }
+}
+
+// FUNÇÃO AUXILIAR PARA ATUALIZAR OS NÚMEROS NA TELA NA HORA
+function atualizarContadoresLocalmente(uidAlvo) {
+    // 1. Atualiza o meu número de "Seguindo" se eu estiver no meu perfil
+    const elSeguindo = document.getElementById('count-seguindo');
+    if (elSeguindo) {
+        let atual = parseInt(elSeguindo.innerText) || 0;
+        elSeguindo.innerText = atual + 1;
+    }
+    
+    // 2. Atualiza o número de "Seguidores" da pessoa que estou visitando
+    const elSeguidoresAlvo = document.getElementById('count-seguidores');
+    // Só atualiza se o perfil aberto for o da pessoa que acabei de seguir
+    if (elSeguidoresAlvo && perfilEmFoco && perfilEmFoco.uid === uidAlvo) {
+        let atualAlvo = parseInt(elSeguidoresAlvo.innerText) || 0;
+        elSeguidoresAlvo.innerText = atualAlvo + 1;
     }
 }
         
@@ -1866,24 +1929,42 @@ async function aceitarAmizade(uidRemetente, notifId) {
     const meuUid = userLogado.uid;
     const updates = {};
 
-    // 1. O remetente (quem pediu) passa a me seguir
+    // 1. O remetente (quem enviou a solicitação) passa a me seguir
     updates[`users/${uidRemetente}/seguindo/${meuUid}`] = true;
     
-    // 2. Eu ganho um novo seguidor
+    // 2. Eu ganho o remetente como meu seguidor
     updates[`users/${meuUid}/seguidores/${uidRemetente}`] = true;
 
-    // 3. Limpa a notificação processada
+    // 3. Limpa a notificação de amizade do banco
     updates[`notificacoes/${meuUid}/${notifId}`] = null;
 
     try {
         await database.ref().update(updates);
-        mostrarAlerta("Novo seguidor adicionado", "✅");
         
-        // Força a atualização da tela de perfil se ela estiver aberta
-        if (perfilEmFoco) verPerfil(perfilEmFoco.uid);
+        // --- ATUALIZAÇÃO DE MEMÓRIA LOCAL ---
+        // Se você também quiser seguir de volta automaticamente ou manter o controle local:
+        // Nota: No modelo Instagram, aceitar uma solicitação apenas permite que ELE te siga.
+        // Se você quiser atualizar sua lista local de seguidores para consistência:
+        if (!dadosUsuario.seguidores) dadosUsuario.seguidores = {};
+        dadosUsuario.seguidores[uidRemetente] = true;
+
+        mostrarAlerta("Novo seguidor adicionado! 👣", "✅");
+        
+        // 4. ATUALIZAÇÃO VISUAL IMEDIATA
+        // Se você estiver na aba de notificações dentro do seu perfil, os números sobem na hora
+        atualizarContadoresLocalmente(uidRemetente);
+
+        // Se estiver visualizando um perfil específico, recarrega para garantir consistência
+        if (perfilEmFoco) {
+            verPerfil(perfilEmFoco.uid);
+        } else {
+            // Se não houver perfil em foco, apenas renderiza as notificações para limpar a lista
+            renderNotificacoes();
+        }
+
     } catch (e) {
-        console.error("Erro ao seguir:", e);
-        mostrarAlerta("Erro ao processar.", "❌");
+        console.error("Erro ao aceitar amizade:", e);
+        mostrarAlerta("Erro ao processar a solicitação.", "❌");
     }
 }
 // --- RECUSAR / LIMPAR NOTIFICAÇÃO ---
