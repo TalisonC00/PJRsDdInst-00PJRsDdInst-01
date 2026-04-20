@@ -129,7 +129,7 @@
         
         <label>Foto de Perfil</label>
         <input type="file" id="final-foto" accept="image/*">
-        
+        <img id="preview-reg" style="display:none;">
         <button class="btn-acao" id="btn-salvar-final" onclick="salvarPerfilFinal()" disabled>Finalizar Cadastro</button>
     </div>
 </div>
@@ -387,7 +387,9 @@ async function executarAuth() {
             if(!nome || !sexo) return mostrarAlerta("Nome e Sexo são obrigatórios.", "⚠️");
 
             const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, senha);
-            const novaFoto = document.getElementById('preview-reg').src; // Pega a foto que está no preview do registro
+            // Substitua a linha antiga por esta versão segura:
+            const elPreview = document.getElementById('preview-reg');
+            const novaFoto = (elPreview && elPreview.src) ? elPreview.src : '';
 
             await database.ref(`users/${userCredential.user.uid}/perfil`).set({
                   nome: nome,
@@ -598,7 +600,14 @@ async function atualizarConfiguracoesPerfil() {
     await database.ref().update(updates);
     mostrarAlerta("Privacidade atualizada!", "🔐");
 }
-
+// Adicione em qualquer lugar do seu script
+document.getElementById('final-foto').addEventListener('change', async function(e) {
+    if (e.target.files && e.target.files[0]) {
+        const fotoBase64 = await converter(e.target.files[0]);
+        document.getElementById('preview-reg').src = fotoBase64;
+    }
+});
+        
 function mostrarAlerta(msg, icon = '💡') {
         document.getElementById('alert-msg').innerText = msg;
         document.getElementById('alert-icon').innerText = icon;
