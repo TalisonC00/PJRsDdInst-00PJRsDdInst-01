@@ -1499,49 +1499,55 @@ function atualizarInterface() {
     // --- Solicitações
 async function enviarSolicitacao(uidAlvo, btn) {
     if (!userLogado) return mostrarAlerta("Faça login para adicionar amigos", "🔒");
-    
-    // Evita cliques duplicados enquanto processa
-    if (btn) {
-        if (btn.innerText === "ENVIADO" || btn.disabled) return;
-        btn.disabled = true;
-        btn.innerText = "⌛...";
-    }
+    if (btn && (btn.innerText === "ENVIADO" || btn.disabled)) return;
 
     try {
-        const refNotif = database.ref(`notificacoes/${uidAlvo}`).push();
-        await refNotif.set({
-            tipo: 'amizade',
-            de_uid: userLogado.uid,
-            de_username: dadosUsuario.username,
-            de_nome: dadosUsuario.nome || dadosUsuario.username,
-            de_foto: dadosUsuario.foto || '',
-            lido: false, // Importante: resetar como não lida
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-        
-        // MUDANÇA VISUAL IMEDIATA
-        if (btn) {
-            btn.innerText = "ENVIADO";
-            btn.style.background = "#CBD5E1"; // Cinza
-            btn.style.color = "#64748B";
-            btn.style.cursor = "default";
-            btn.disabled = true;
+        const snapAlvo = await database.ref(`users/${uidAlvo}/perfil`).once('value');
+        const perfilAlvo = snapAlvo.val();
+
+        if (perfilAlvo.tipo === 'publico') {
+            // SE FOR PÚBLICO: Segue direto (Estilo Instagram)
+            const updates = {};
+            updates[`users/${userLogado.uid}/seguindo/${uidAlvo}`] = true;
+            updates[`users/${uidAlvo}/seguidores/${userLogado.uid}`] = true;
+            await database.ref().update(updates);
+            
+            // Atualiza localmente para o contador mudar sem F5
+            if(!dadosUsuario.seguindo) dadosUsuario.seguindo = {};
+            dadosUsuario.seguindo[uidAlvo] = true;
+
+            if (btn) {
+                btn.innerText = "SEGUINDO";
+                btn.style.background = "var(--money)";
+            }
+            mostrarAlerta("Agora você segue @" + perfilAlvo.username, "✅");
+        } else {
+            // SE FOR PRIVADO: Envia solicitação
+            await database.ref(`notificacoes/${uidAlvo}`).push().set({
+                tipo: 'amizade',
+                de_uid: userLogado.uid,
+                de_username: dadosUsuario.username,
+                de_foto: dadosUsuario.foto || '',
+                lido: false,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            if (btn) {
+                btn.innerText = "ENVIADO";
+                btn.style.background = "#CBD5E1";
+            }
+            mostrarAlerta("Solicitação enviada!", "📩");
         }
         
-        mostrarAlerta("Solicitação enviada com sucesso!", "📩");
-        // LIMPEZA PÓS-ENVIO
+        // Limpa busca após 1 segundo
         setTimeout(() => {
-            document.getElementById('resultado-busca').innerHTML = ''; // Limpa a lista embaixo
-            document.getElementById('input-busca').value = '';        // Limpa o texto digitado
-        }, 500); // Meio segundo de delay para o usuário ver o botão mudar antes de sumir
-    
+            document.getElementById('resultado-busca').innerHTML = '';
+            document.getElementById('input-busca').value = '';
+        }, 1000);
+
     } catch (error) {
-        console.error("Erro ao enviar solicitação:", error);
-        mostrarAlerta("Erro ao enviar. Tente novamente.", "❌");
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = "ADICIONAR";
-        }
+        console.error("Erro:", error);
+        mostrarAlerta("Erro ao processar ação.", "❌");
     }
 }
         
@@ -1567,29 +1573,17 @@ async function pesquisarUsuarios(termo) {
             if (uid === userLogado.uid) continue;
             const u = users[uid].perfil;
             
+            // Verificação em tempo real
             const saoAmigos = dadosUsuario.seguindo && dadosUsuario.seguindo[uid];
-            
-            // O ERRO ESTAVA NO AWAIT ABAIXO SEM O ASYNC NA FUNÇÃO PAI
             const snapPend = await database.ref(`notificacoes/${uid}`).orderByChild('de_uid').equalTo(userLogado.uid).once('value');
             let pendente = false;
             if(snapPend.exists()){
                 pendente = Object.values(snapPend.val()).some(n => n.tipo === 'amizade');
             }
 
-            let textoBtn = "ADICIONAR";
-            let estiloBtn = "background:var(--primary);";
-            let acao = `enviarSolicitacao('${uid}')`;
-
-            if (saoAmigos) {
-                textoBtn = "AMIGOS🤝";
-                estiloBtn = "background:var(--money); cursor:default;";
-                acao = "";
-            } else if (pendente) {
-                textoBtn = "ENVIADO";
-                estiloBtn = "background:#CBD5E1; color:#64748B; cursor:default;";
-                acao = "";
-            }
-
+            let textoBtn = saoAmigos ? "SEGUINDO" : (pendente ? "ENVIADO" : "SEGUIR");
+            let estiloBtn = saoAmigos ? "background:var(--money);" : (pendente ? "background:#ccc;" : "background:var(--primary);");
+            
             const item = document.createElement('div');
             item.style = "display:flex; align-items:center; justify-content:space-between; padding:12px; background:#f8fafc; border-radius:12px; margin-bottom:8px; border:1px solid #edf2f7;";
             item.innerHTML = `
@@ -1600,7 +1594,7 @@ async function pesquisarUsuarios(termo) {
                     <b style="font-size:13px;">@${u.username}</b>
                 </div>
                 <button id="btn-add-${uid}" onclick="enviarSolicitacao('${uid}', this)" style="${estiloBtn} color:white; border:none; padding:6px 12px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
-                   ${textoBtn}
+                    ${textoBtn}
                 </button>
             `;
             listaBusca.appendChild(item);
