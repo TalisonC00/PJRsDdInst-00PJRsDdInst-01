@@ -1277,27 +1277,34 @@ function escutarNotificacoes() {
     const badge = document.getElementById('badge-notif');
     if (!badge) return;
 
-    // O listener .on garante que se o dado sumir do banco, ele some da tela NA HORA
     database.ref(`notificacoes/${userLogado.uid}`).on('value', snap => {
         const notifs = snap.val();
         if (notifs) {
-            if (navigator.vibrate) navigator.vibrate(200); // Vibra por 200ms
-            // Filtra apenas as que existem e não foram lidas
             const naoLidas = Object.values(notifs).filter(n => n && !n.lido).length;
             
             if (naoLidas > 0) {
+                // Tenta vibrar, mas ignora silenciosamente se o navegador bloquear
+                try {
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200);
+                    }
+                } catch (e) {
+                    // O navegador bloqueou a vibração automática, sem problemas.
+                    console.log("Vibração aguardando interação do usuário.");
+                }
+
                 badge.innerText = naoLidas;
                 badge.style.display = 'flex';
             } else {
                 badge.style.display = 'none';
             }
         } else {
-            // Se o nó de notificações estiver vazio, limpa tudo
             badge.style.display = 'none';
             badge.innerText = '0';
         }
     });
 }
+        
 function abrirHistorico(id) {
     // 1. Verifica Privacidade
     // Se o perfil que estamos vendo (perfilEmFoco) for privado e eu não for o dono
