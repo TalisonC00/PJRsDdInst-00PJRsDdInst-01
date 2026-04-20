@@ -1606,23 +1606,28 @@ async function pesquisarUsuarios(termo) {
         
 // --- 2. PERFIL DETALHADO E EDIÇÃO ---
 function abrirVisualizacaoPerfil() {
-    if (!dadosUsuario) return;
+    // Usamos o perfilEmFoco (quem estamos visitando) ou dadosUsuario (nós mesmos) como reserva
+    const alvo = perfilEmFoco || dadosUsuario;
+    if (!alvo) return;
+
     const container = document.getElementById('aba-perfil-detalhado');
-    
-    const totalEstados = Object.keys(dbGlobal).length;
-    const totalSeguindo = dadosUsuario.seguindo ? Object.keys(dadosUsuario.seguindo).length : 0;
-    const totalSeguidores = dadosUsuario.seguidores ? Object.keys(dadosUsuario.seguidores).length : 0;
+    const isOwner = (alvo.uid === userLogado.uid);
+
+    // Cálculo dinâmico baseado no perfil que está sendo exibido
+    const totalEstados = dbGlobal ? Object.keys(dbGlobal).length : 0;
+    const totalSeguindo = alvo.seguindo ? Object.keys(alvo.seguindo).length : 0;
+    const totalSeguidores = alvo.seguidores ? Object.keys(alvo.seguidores).length : 0;
 
     container.innerHTML = `
         <div class="card" style="text-align:center; position:relative; padding-top: 40px;">
-            <button onclick="abrirMeuPerfilDetalhado()" style="position:absolute; top:20px; right:20px; background:none; border:none; font-size:20px; cursor:pointer;">⚙️</button>
+            ${isOwner ? `<button onclick="abrirMeuPerfilDetalhado()" style="position:absolute; top:20px; right:20px; background:none; border:none; font-size:20px; cursor:pointer;">⚙️</button>` : ''}
             
             <div style="width:100px; height:100px; background:var(--sky); border-radius:50%; margin:0 auto 15px; display:flex; align-items:center; justify-content:center; overflow:hidden; border:3px solid var(--primary); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-                ${dadosUsuario.foto ? `<img src="${dadosUsuario.foto}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="font-size:45px;">👤</span>'}
+                ${alvo.foto ? `<img src="${alvo.foto}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="font-size:45px;">👤</span>'}
             </div>
             
-            <h2 style="margin:0; font-weight:800; font-size:20px; color:var(--text-main);">${dadosUsuario.nome || 'Viajante'}</h2>
-            <p style="margin:2px 0 15px; color:var(--primary); font-weight:700; font-size:15px;">@${dadosUsuario.username}</p>
+            <h2 style="margin:0; font-weight:800; font-size:20px; color:var(--text-main);">${alvo.nome || 'Viajante'}</h2>
+            <p style="margin:2px 0 15px; color:var(--primary); font-weight:700; font-size:15px;">@${alvo.username}</p>
             
             <div style="display: flex; justify-content: center; gap: 30px; margin: 20px 0; padding: 15px 0; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
                 <div style="text-align: center; cursor:pointer;" onclick="mostrarListaConexoes('seguindo')">
@@ -1640,18 +1645,26 @@ function abrirVisualizacaoPerfil() {
             </div>
 
             <div style="background:#f8fafc; padding:15px; border-radius:20px; margin-bottom:25px; text-align:left;">
-                <span style="font-size:9px; font-weight:800; color:var(--text-sub); text-transform:uppercase;">Minha Bio</span>
-                <p style="margin:8px 0 0; font-size:14px; color:var(--text-main);">${dadosUsuario.bio || 'Explorando o Brasil...'}</p>
+                <span style="font-size:9px; font-weight:800; color:var(--text-sub); text-transform:uppercase;">Bio</span>
+                <p style="margin:8px 0 0; font-size:14px; color:var(--text-main);">${alvo.bio || 'Explorando o Brasil...'}</p>
             </div>
 
             <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
                 <span class="pill" style="background:var(--sky); color:var(--text-main); padding:8px 20px; border-radius:100px; font-size:11px; font-weight:800; border:none;">
-                    ${dadosUsuario.tipo === 'publico' ? '🌍 VIAJANTE BRASIL' : '🔒 VIAJANTE LOCAL'}
+                    ${alvo.tipo === 'publico' ? '🌍 VIAJANTE BRASIL' : '🔒 VIAJANTE LOCAL'}
                 </span>
-                <button onclick="firebase.auth().signOut().then(() => location.reload())" 
-                        style="background:none; color:var(--primary); font-weight:800; border:none; cursor:pointer; margin-top:10px; font-size:12px;">
-                    🚪 SAIR DA CONTA
-                </button>
+                
+                ${isOwner ? `
+                    <button onclick="firebase.auth().signOut().then(() => location.reload())" 
+                            style="background:none; color:var(--primary); font-weight:800; border:none; cursor:pointer; margin-top:10px; font-size:12px;">
+                         SAIR DA CONTA
+                    </button>
+                ` : `
+                    <button onclick="verPerfil(userLogado.uid)" 
+                            style="background:var(--primary); color:white; font-weight:800; border:none; cursor:pointer; padding:10px 20px; border-radius:12px; margin-top:10px; font-size:11px;">
+                        🏠 VOLTAR AO MEU PERFIL
+                    </button>
+                `}
             </div>
         </div>
     `;
