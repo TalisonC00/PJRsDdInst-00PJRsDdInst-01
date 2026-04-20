@@ -386,69 +386,40 @@ async function executarAuth() {
 
             if(!nome || !sexo) return mostrarAlerta("Nome e Sexo são obrigatórios.", "⚠️");
 
+            // 1. Cria o usuário no Auth
             const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, senha);
-            // Substitua a linha antiga por esta versão segura:
-            const elPreview = document.getElementById('preview-reg');
-            const novaFoto = (elPreview && elPreview.src) ? elPreview.src : '';
-
+            
+            // 2. Salva o perfil inicial (isso dispara o onAuthStateChanged com sucesso)
             await database.ref(`users/${userCredential.user.uid}/perfil`).set({
-                  nome: nome,
-                  sexo: sexo,
-                  tipo: tipo,
-                  username: email.split('@')[0], // Sugestão de username inicial
-                  foto: novaFoto.includes('base64') ? novaFoto : '', // Só salva se for uma imagem real
-                  uid: userCredential.user.uid,
-                  criadoEm: new Date().toISOString()
+                nome: nome,
+                sexo: sexo,
+                tipo: tipo,
+                uid: userCredential.user.uid,
+                criadoEm: new Date().toISOString(),
+                username: "" // Deixa vazio para forçar a tela de "Finalizar Cadastro"
             });
-            mostrarAlerta("Conta criada com sucesso", "✅");
+            
+            // Não precisa de mostrarAlerta aqui, o observador vai trocar a tela sozinho
         } else {
             await firebase.auth().signInWithEmailAndPassword(email, senha);
         }
     } catch (e) { 
         console.error("Código detectado:", e.code); 
+        let mensagemAmigavel = "Erro ao processar. Tente novamente.";
         
-        let mensagemAmigavel = "Ocorreu um erro inesperado.";
-        let icone = "❌";
-
-        // MAPEAMENTO ATUALIZADO (Incluindo o erro da imagem)
         switch (e.code) {
-            case 'auth/invalid-login-credentials': // ESTE É O DA SUA FOTO
-            case 'auth/invalid-credential':
-            case 'auth/user-not-found':
+            case 'auth/invalid-login-credentials':
             case 'auth/wrong-password':
-                mensagemAmigavel = "E-mail ou senha incorretos.";
-                icone = "🔑";
-                break;
-            case 'auth/invalid-email':
-                mensagemAmigavel = "O formato do e-mail é inválido.";
-                icone = "📧";
-                break;
+            case 'auth/user-not-found':
+                mensagemAmigavel = "E-mail ou senha incorretos."; break;
             case 'auth/email-already-in-use':
-                mensagemAmigavel = "Este e-mail já está em uso por outro viajante.";
-                icone = "🚫";
-                break;
+                mensagemAmigavel = "Este e-mail já está em uso."; break;
             case 'auth/weak-password':
-                mensagemAmigavel = "Senha muito fraca. Use pelo menos 6 caracteres.";
-                icone = "🛡️";
-                break;
-            case 'auth/too-many-requests':
-                mensagemAmigavel = "Muitas tentativas falhas. Tente novamente em instantes.";
-                icone = "⏳";
-                break;
-            case 'auth/network-request-failed':
-                mensagemAmigavel = "Erro de conexão. Verifique sua internet.";
-                icone = "📶";
-                break;
-            case 'auth/user-disabled':
-                mensagemAmigavel = "Esta conta foi desativada.";
-                icone = "🚫";
-                break;
+                mensagemAmigavel = "Senha muito fraca (mínimo 6 caracteres)."; break;
             default:
-                // Se cair aqui, removemos o "Firebase:" da frente para ficar mais limpo
-                mensagemAmigavel = e.message.replace('Firebase:', '').trim();
+                mensagemAmigavel = e.message.replace('Firebase:', '');
         }
-
-        mostrarAlerta(mensagemAmigavel, icone); 
+        mostrarAlerta(mensagemAmigavel, "❌"); 
     }
 }
     
@@ -600,13 +571,17 @@ async function atualizarConfiguracoesPerfil() {
     await database.ref().update(updates);
     mostrarAlerta("Privacidade atualizada!", "🔐");
 }
-// Adicione em qualquer lugar do seu script
-document.getElementById('final-foto').addEventListener('change', async function(e) {
-    if (e.target.files && e.target.files[0]) {
-        const fotoBase64 = await converter(e.target.files[0]);
-        document.getElementById('preview-reg').src = fotoBase64;
-    }
-});
+
+const inputFotoFinal = document.getElementById('final-foto');
+if (inputFotoFinal) {
+    inputFotoFinal.addEventListener('change', async function(e) {
+        if (e.target.files && e.target.files[0]) {
+            const fotoBase64 = await converter(e.target.files[0]);
+            const preview = document.getElementById('preview-reg');
+            if(preview) preview.src = fotoBase64;
+        }
+    });
+}
         
 function mostrarAlerta(msg, icon = '💡') {
         document.getElementById('alert-msg').innerText = msg;
