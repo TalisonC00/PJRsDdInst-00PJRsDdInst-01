@@ -438,16 +438,30 @@ async function salvarPerfilFinal() {
     const username = document.getElementById('final-username').value.toLowerCase().replace('@', '').trim();
     const bio = document.getElementById('final-bio').value;
     
-    // Salva o link de username único
-    await database.ref(`usernames/${username}`).set(user.uid);
-    
-    // Atualiza apenas os novos campos
-    await database.ref(`users/${user.uid}/perfil`).update({
-        username: username,
-        bio: bio
-    });
-    
-    location.reload(); 
+    // CAPTURA A FOTO QUE ESTÁ NO PREVIEW
+    const elPreview = document.getElementById('preview-reg');
+    const fotoFinal = (elPreview && elPreview.src.includes('base64')) ? elPreview.src : '';
+
+    try {
+        // 1. Salva o link de username único
+        await database.ref(`usernames/${username}`).set(user.uid);
+        
+        // 2. Atualiza o perfil com TODOS os campos, incluindo a foto
+        await database.ref(`users/${user.uid}/perfil`).update({
+            username: username,
+            bio: bio,
+            foto: fotoFinal // AQUI ESTAVA O ERRO!
+        });
+        
+        // 3. Em vez de location.reload, apenas inicializamos o app com os dados novos
+        const snap = await database.ref(`users/${user.uid}/perfil`).once('value');
+        document.getElementById('auth-container').style.display = 'none';
+        initApp(snap.val());
+        
+    } catch (e) {
+        console.error(e);
+        mostrarAlerta("Erro ao finalizar perfil.", "❌");
+    }
 }
         
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
@@ -1709,15 +1723,40 @@ async function atualizarFotoPreview(input) {
 async function salvarAlteracoesCompletas() {
     const user = userLogado.uid;
     const updates = {};
-    updates[`users/${user}/perfil/nome`] = document.getElementById('edit-nome').value;
-    updates[`users/${user}/perfil/username`] = document.getElementById('edit-username').value.toLowerCase().trim();
-    updates[`users/${user}/perfil/bio`] = document.getElementById('edit-bio').value;
-    updates[`users/${user}/perfil/tipo`] = document.getElementById('edit-tipo').value;
-    if(novaFotoBase64) updates[`users/${user}/perfil/foto`] = novaFotoBase64;
+    
+    const novoNome = document.getElementById('edit-nome').value;
+    const novoUser = document.getElementById('edit-username').value.toLowerCase().trim();
+    const novaBio = document.getElementById('edit-bio').value;
+    const novoTipo = document.getElementById('edit-tipo').value;
 
-    await database.ref().update(updates);
-    mostrarAlerta("Perfil atualizado!", "✅");
-    location.reload(); // Recarrega para aplicar as mudanças de foto em todo o app
+    updates[`users/${user}/perfil/nome`] = novoNome;
+    updates[`users/${user}/perfil/username`] = novoUser;
+    updates[`users/${user}/perfil/bio`] = novaBio;
+    updates[`users/${user}/perfil/tipo`] = novoTipo;
+    
+    if(novaFotoBase64) {
+        updates[`users/${user}/perfil/foto`] = novaFotoBase64;
+        // Atualiza a variável local para refletir na UI sem refresh
+        dadosUsuario.foto = novaFotoBase64; 
+    }
+
+    try {
+        await database.ref().update(updates);
+        
+        // Atualiza os dados locais para a interface mudar na hora
+        dadosUsuario.nome = novoNome;
+        dadosUsuario.username = novoUser;
+        dadosUsuario.bio = novaBio;
+        dadosUsuario.tipo = novoTipo;
+
+        mostrarAlerta("Perfil atualizado!", "✅");
+        
+        // Em vez de location.reload(), apenas volta para a visualização
+        abrirVisualizacaoPerfil(); 
+        
+    } catch (e) {
+        mostrarAlerta("Erro ao salvar alterações.", "❌");
+    }
 }
         
 function renderNotificacoes() {
