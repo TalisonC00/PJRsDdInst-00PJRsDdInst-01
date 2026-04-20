@@ -1760,27 +1760,44 @@ async function salvarAlteracoesCompletas() {
     updates[`users/${user}/perfil/bio`] = novaBio;
     updates[`users/${user}/perfil/tipo`] = novoTipo;
     
+    // Se houve troca de foto, adiciona ao pacote de atualização
     if(novaFotoBase64) {
         updates[`users/${user}/perfil/foto`] = novaFotoBase64;
-        // Atualiza a variável local para refletir na UI sem refresh
-        dadosUsuario.foto = novaFotoBase64; 
     }
 
     try {
         await database.ref().update(updates);
         
-        // Atualiza os dados locais para a interface mudar na hora
+        // --- O PULO DO GATO: ATUALIZAÇÃO EM TEMPO REAL NA MEMÓRIA ---
         dadosUsuario.nome = novoNome;
         dadosUsuario.username = novoUser;
         dadosUsuario.bio = novaBio;
         dadosUsuario.tipo = novoTipo;
+        if(novaFotoBase64) dadosUsuario.foto = novaFotoBase64;
 
-        mostrarAlerta("Perfil atualizado!", "✅");
+        // 1. Atualiza o Header (Nome e @)
+        const elRealName = document.getElementById('user-real-name-header');
+        const elBadge = document.getElementById('user-badge');
+        if(elRealName) elRealName.innerText = novoNome || "Viajante";
+        if(elBadge) elBadge.innerText = `@${novoUser}`;
+
+        // 2. Atualiza a Foto no Header (se mudou)
+        if(novaFotoBase64) {
+            const elImgHeader = document.getElementById('img-perfil-header');
+            if(elImgHeader) {
+                elImgHeader.src = novaFotoBase64;
+                elImgHeader.style.display = "block";
+                document.getElementById('emoji-perfil-header').style.display = "none";
+            }
+        }
+
+        mostrarAlerta("Perfil atualizado com sucesso!", "✅");
         
-        // Em vez de location.reload(), apenas volta para a visualização
+        // 3. Volta para a visualização do perfil (ela já usará os dados de 'dadosUsuario' atualizados)
         abrirVisualizacaoPerfil(); 
         
     } catch (e) {
+        console.error("Erro ao salvar:", e);
         mostrarAlerta("Erro ao salvar alterações.", "❌");
     }
 }
