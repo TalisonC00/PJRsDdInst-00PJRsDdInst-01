@@ -488,86 +488,63 @@ async function salvarPerfilFinal() {
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
 async function verPerfil(uidAlvo) {
     try {
-        // 1. LIMPEZA DE MEMÓRIA: Desliga ouvintes antigos para evitar conflitos e lentidão
         if (listenerPerfilAtivo) listenerPerfilAtivo.off();
         if (listenerSeguidoresAtivo) listenerSeguidoresAtivo.off();
         if (listenerSeguindoAtivo) listenerSeguindoAtivo.off();
 
-        // 2. DEFINE O NOVO VIGIA DO PERFIL (Nome, Bio, Foto)
+        const isOwner = (uidAlvo === userLogado.uid);
+
+        // --- CONTROLE DE VISIBILIDADE DAS ABAS (OCULTAR) ---
+        const btnReg = document.getElementById('btn-nav-registro');
+        const btnGas = document.getElementById('btn-nav-gastos');
+        const btnHome = document.getElementById('btn-nav-home');
+
+        if (isOwner) {
+            if (btnReg) btnReg.style.display = "block";
+            if (btnGas) btnGas.style.display = "block";
+            if (btnHome) btnHome.style.display = "none";
+        } else {
+            if (btnReg) btnReg.style.display = "none";
+            if (btnGas) btnGas.style.display = "none";
+            if (btnHome) btnHome.style.display = "block";
+        }
+
         listenerPerfilAtivo = database.ref(`users/${uidAlvo}/perfil`);
-
         listenerPerfilAtivo.on('value', async (snap) => {
-            const dadosAlvo = snap.val();
+            const p = snap.val();
+            if (!p) return;
+            
+            perfilEmFoco = { uid: uidAlvo, ...p };
 
-            if (!dadosAlvo) {
-                mostrarAlerta("Usuário não encontrado.", "❌");
-                return;
-            }
-
-            // ATUALIZA O ESTADO GLOBAL DE FOCO
-            perfilEmFoco = { uid: uidAlvo, ...dadosAlvo };
-            const isOwner = (uidAlvo === userLogado.uid);
-
-            // 3. VIGIA SEGUIDORES E SEGUINDO EM TEMPO REAL
-            // Usamos .on aqui para que o número mude NO SEGUNDO que alguém clica no botão
+            // Ouvinte de SEGUIDORES (Reatividade estilo Instagram)
             listenerSeguidoresAtivo = database.ref(`users/${uidAlvo}/seguidores`);
-            listenerSeguidoresAtivo.on('value', (sSnap) => {
-                const totalSeguidores = sSnap.val() ? Object.keys(sSnap.val()).length : 0;
-
+            listenerSeguidoresAtivo.on('value', sSnap => {
+                const nSeguidores = sSnap.val() ? Object.keys(sSnap.val()).length : 0;
+                
                 listenerSeguindoAtivo = database.ref(`users/${uidAlvo}/seguindo`);
-                listenerSeguindoAtivo.on('value', (sgSnap) => {
-                    const totalSeguindo = sgSnap.val() ? Object.keys(sgSnap.val()).length : 0;
-
-                    // 4. BUSCA AS VIAGENS (Estados conquistados)
-                    database.ref(`users/${uidAlvo}/viagens`).on('value', (vSnap) => {
+                listenerSeguindoAtivo.on('value', sgSnap => {
+                    const nSeguindo = sgSnap.val() ? Object.keys(sgSnap.val()).length : 0;
+                    
+                    database.ref(`users/${uidAlvo}/viagens`).on('value', vSnap => {
                         const viagens = vSnap.val() || {};
-                        const totalEstados = Object.keys(viagens).length;
+                        if(!isOwner) dbGlobal = viagens; // Troca o dbGlobal para o mapa do alvo
 
-                        // Se estivermos visitando, o dbGlobal precisa ser o do alvo para pintar o mapa dele
-                        if (!isOwner) dbGlobal = viagens;
+                        const nEstados = Object.keys(viagens).length;
 
-                        // 5. ATUALIZA A IDENTIDADE VISUAL DO HEADER (IDENTIDADE FIXA)
-                        document.getElementById('user-badge').innerText = `@${dadosAlvo.username}`;
-                        document.getElementById('user-real-name-header').innerText = dadosAlvo.nome || "Viajante";
-
-                        const elImg = document.getElementById('img-perfil-header');
-                        const elEmoji = document.getElementById('emoji-perfil-header');
-                        if (dadosAlvo.foto && elImg) {
-                            elImg.src = dadosAlvo.foto;
-                            elImg.style.display = "block";
-                            if (elEmoji) elEmoji.style.display = "none";
-                        } else if (elEmoji) {
-                            if (elImg) elImg.style.display = "none";
-                            elEmoji.style.display = "block";
-                        }
-
-                        if (!isOwner) {
-                            document.getElementById('info').innerHTML = `VISITANDO PERFIL <button onclick="verPerfil(userLogado.uid)" style="font-size:8px; background:var(--primary); color:white; border:none; border-radius:5px; padding:2px 5px; margin-left:5px; cursor:pointer; font-weight:800;">VER MEU MAPA</button>`;
-                        } else {
-                            document.getElementById('info').innerText = `${totalEstados} ${totalEstados === 1 ? 'ESTADO CONQUISTADO' : 'ESTADOS CONQUISTADOS'}`;
-                        }
-
-                        // 6. RE-RENDERIZA OS COMPONENTES VISUAIS
-                        atualizarInterface(); // Pinta o mapa
-                        renderTimeline();     // Monta a linha do tempo
-                        renderJornada();      // Atualiza troféus
-
-                        // 7. ATUALIZA A ABA DE PERFIL DETALHADO (A VITRINE)
-                        // Passamos os números reais e fresquinhos para a função de desenho
-                        abrirVisualizacaoPerfil(perfilEmFoco, totalSeguidores, totalSeguindo, totalEstados);
+                        // Renderiza a interface detalhada com os números fresquinhos
+                        abrirVisualizacaoPerfil(perfilEmFoco, nSeguidores, nSeguindo, nEstados);
+                        atualizarInterface();
+                        renderTimeline();
                     });
                 });
             });
         });
 
-        // 8. NAVEGAÇÃO E LIMPEZA INICIAL
         fecharPopup();
-        const botoesNav = document.querySelectorAll('.btn-aba');
-        trocarAba('mapa', botoesNav[1]); // Joga o usuário no mapa do alvo
+        trocarAba('mapa', document.querySelectorAll('.btn-aba')[1]);
 
     } catch (error) {
-        console.error("Erro crítico ao carregar perfil:", error);
-        mostrarAlerta("Erro ao visitar perfil.", "❌");
+        console.error("Erro verPerfil:", error);
     }
 }
         
@@ -922,17 +899,30 @@ function finalizarAjustes() {
 
 // 3. Atualização da função trocarAba
 function trocarAba(id, btn) {
+    // Só permite 'registro' ou 'gastos' se perfilEmFoco for o próprio usuário logado
+    const souDono = (!perfilEmFoco || perfilEmFoco.uid === userLogado.uid);
+
+    if ((id === 'registro' || id === 'gastos') && !souDono) {
+        // Redireciona silenciosamente para o feed se tentar invadir
+        trocarAba('feed', document.querySelectorAll('.btn-aba')[0]);
+        return;
+    }
+
     document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
-    const bts = document.querySelectorAll('.btn-aba');
-    bts.forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.btn-aba').forEach(b => b.classList.remove('active'));
     
-    document.getElementById('aba-' + id).classList.add('ativa');
-    if(btn) btn.classList.add('active');
+    const abaAlvo = document.getElementById('aba-' + id);
+    if(abaAlvo) {
+        abaAlvo.classList.add('ativa');
+        if(btn) btn.classList.add('active');
+    }
 
     if(id === 'feed') renderFeed();
-    if(id === 'notificacoes') { renderNotificacoes(); database.ref(`notificacoes/${userLogado.uid}`).update({lida: true}); }
+    if(id === 'notificacoes') { 
+        renderNotificacoes(); 
+        database.ref(`notificacoes/${userLogado.uid}`).update({lida: true}); 
+    }
 }
-
 // ESTA FUNÇÃO VAI NO BOTÃO "UHUL!" DO SEU HTML
 function fecharCelebracaoEProxima() {
     // Remove a conquista que acabou de ser mostrada da fila
@@ -1964,6 +1954,24 @@ async function aceitarAmizade(uidRemetente, notifId) {
         mostrarAlerta("Erro ao processar a solicitação.", "❌");
     }
 }
+
+// CORREÇÃO: No seu HTML, div id="user-info-top" deve ser:
+// <div id="user-info-top" onclick="verPerfil(userLogado.uid)" ...>
+
+// Função para o botão VOLTAR dentro da edição de perfil
+function voltarDaEdicao() {
+    verPerfil(userLogado.uid);
+}
+
+// Função para recusar notificação corrigida
+async function recusarNotificacao(notifId) {
+    try {
+        await database.ref(`notificacoes/${userLogado.uid}/${notifId}`).remove();
+        mostrarAlerta("Solicitação removida.", "🗑️");
+    } catch (e) {
+        mostrarAlerta("Erro ao processar.", "❌");
+    }
+}
 // --- RECUSAR / LIMPAR NOTIFICAÇÃO ---
 function fecharModalConexoes() {
     document.getElementById('modal-conexoes').style.display = 'none';
@@ -2100,23 +2108,22 @@ function toggleAuthMode() {
 
 // Inicialização correta do App
 function initApp(perfil) {
-    // 1. Definição de variáveis de estado global para o dono do celular
     dadosUsuario = perfil;
     
-    // 2. Escuta Notificações (Sininho)
+    // VIGIA MESTRE: Mantém seus dados de seguindo sempre atualizados
+    database.ref(`users/${userLogado.uid}/seguindo`).on('value', snap => {
+        dadosUsuario.seguindo = snap.val() || {};
+    });
+
     escutarNotificacoes(); 
 
-    // 3. ATIVAÇÃO DO MOTOR REATIVO
-    // O verPerfil do próprio usuário ativa todos os ouvintes (.on) de seguidores e seguindo
+    // O verPerfil inicia o fluxo reativo para o seu próprio perfil
     verPerfil(userLogado.uid);
     
-    // 4. Escuta Viagens especificamente para disparar o sistema de troféus/celebracao
-    // (As outras renderizações de viagem são cuidadas dentro da verPerfil agora)
     database.ref(`users/${userLogado.uid}/viagens`).on('value', (snapshot) => {
         verificarNovasConquistas();
     });
 
-    // 5. Inicialização do Mapa SVG
     init(); 
 }
 
