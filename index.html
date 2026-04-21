@@ -497,19 +497,17 @@ async function salvarPerfilFinal() {
 async function verPerfil(uidAlvo) {
     dbGlobal = {};
     try {
-        // 1. Limpeza total de listeners antigos para evitar sobreposição de dados
         if (listenerPerfilAtivo) listenerPerfilAtivo.off();
         if (listenerSeguidoresAtivo) listenerSeguidoresAtivo.off();
         if (listenerSeguindoAtivo) listenerSeguindoAtivo.off();
 
         const isOwner = (uidAlvo === userLogado.uid);
 
-        // 2. Controle de botões da Nav (Registro/Gastos somem se o perfil não for seu)
+        // Ajuste de botões
         document.getElementById('btn-nav-registro').style.display = isOwner ? "block" : "none";
         document.getElementById('btn-nav-gastos').style.display = isOwner ? "block" : "none";
         document.getElementById('btn-nav-home').style.display = isOwner ? "none" : "block";
 
-        // 3. Busca dados do perfil alvo
         listenerPerfilAtivo = database.ref(`users/${uidAlvo}/perfil`);
         listenerPerfilAtivo.on('value', async (snap) => {
             const p = snap.val();
@@ -517,25 +515,23 @@ async function verPerfil(uidAlvo) {
             
             perfilEmFoco = { uid: uidAlvo, ...p };
 
-            // 4. Busca viagens do alvo (Isso altera o mapa e a timeline)
+            // --- A MUDANÇA ESTÁ AQUI: Atualiza o topo com o perfil que estamos vendo ---
+            atualizarHeader(perfilEmFoco);
+
             database.ref(`users/${uidAlvo}/viagens`).on('value', vSnap => {
                 const viagens = vSnap.val() || {};
-                
-                // CRITICAL: Atualiza o banco global com as viagens do perfil que estamos vendo
                 dbGlobal = viagens; 
 
-                // 5. Busca contadores (Seguidores/Seguindo)
                 database.ref(`users/${uidAlvo}/seguidores`).once('value', sSnap => {
                     const nSeguidores = sSnap.val() ? Object.keys(sSnap.val()).length : 0;
-                    
                     database.ref(`users/${uidAlvo}/seguindo`).once('value', sgSnap => {
                         const nSeguindo = sgSnap.val() ? Object.keys(sgSnap.val()).length : 0;
                         const nEstados = Object.keys(viagens).length;
 
-                        // Renderiza a interface
+                        // Se estivermos abrindo a aba de perfil, ela carrega o alvo
                         abrirVisualizacaoPerfil(perfilEmFoco, nSeguidores, nSeguindo, nEstados);
-                        atualizarInterface(); // Pinta o mapa
-                        renderTimeline();    // Monta a timeline do alvo
+                        atualizarInterface(); 
+                        renderTimeline();    
                     });
                 });
             });
@@ -543,7 +539,7 @@ async function verPerfil(uidAlvo) {
 
         fecharPopup();
     } catch (error) {
-        console.error("Erro ao carregar perfil:", error);
+        console.error("Erro verPerfil:", error);
     }
 }
         
@@ -1794,7 +1790,26 @@ async function atualizarFotoPreview(input) {
         document.getElementById('foto-preview-container').innerHTML = `<img src="${novaFotoBase64}" style="width:100%; height:100%; object-fit:cover;">`;
     }
 }
+        
+function atualizarHeader(p) {
+    const elRealName = document.getElementById('user-real-name-header');
+    const elBadge = document.getElementById('user-badge');
+    const elImg = document.getElementById('img-perfil-header');
+    const elEmoji = document.getElementById('emoji-perfil-header');
 
+    if(elRealName) elRealName.innerText = p.nome || "Viajante";
+    if(elBadge) elBadge.innerText = `@${p.username}`;
+
+    if (p.foto && elImg) {
+        elImg.src = p.foto;
+        elImg.style.display = "block";
+        if(elEmoji) elEmoji.style.display = "none";
+    } else if(elEmoji) {
+        if(elImg) elImg.style.display = "none";
+        elEmoji.style.display = "block";
+    }
+}
+        
 async function salvarAlteracoesCompletas() {
     const user = userLogado.uid;
     const updates = {};
@@ -2109,6 +2124,7 @@ function toggleAuthMode() {
 function initApp(perfil) {
     // 1. Preenchimento imediato da memória e do Header (Fim do "Carregando...")
     dadosUsuario = perfil;
+    atualizarHeader(perfil);
     
     const elRealName = document.getElementById('user-real-name-header');
     const elBadge = document.getElementById('user-badge');
