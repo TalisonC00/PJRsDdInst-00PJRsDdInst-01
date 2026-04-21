@@ -894,11 +894,9 @@ function finalizarAjustes() {
 
 // 3. Atualização da função trocarAba
 function trocarAba(id, btn) {
-    // Só permite 'registro' ou 'gastos' se perfilEmFoco for o próprio usuário logado
     const souDono = (!perfilEmFoco || perfilEmFoco.uid === userLogado.uid);
 
     if ((id === 'registro' || id === 'gastos') && !souDono) {
-        // Redireciona silenciosamente para o feed se tentar invadir
         trocarAba('feed', document.querySelectorAll('.btn-aba')[0]);
         return;
     }
@@ -912,7 +910,11 @@ function trocarAba(id, btn) {
         if(btn) btn.classList.add('active');
     }
 
+    // --- GATILHOS DE RENDERIZAÇÃO ---
     if(id === 'feed') renderFeed();
+    if(id === 'jornada') renderJornada(); // <- ADICIONE ESTA LINHA
+    if(id === 'gastos') renderGastos();   // <- ADICIONE ESTA LINHA PARA GARANTIR
+    
     if(id === 'notificacoes') { 
         renderNotificacoes(); 
         database.ref(`notificacoes/${userLogado.uid}`).update({lida: true}); 
