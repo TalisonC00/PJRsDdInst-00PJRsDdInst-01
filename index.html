@@ -369,27 +369,35 @@ const REGIOES = {
     };
 
 // Observador de Autenticação
+// Observador de Autenticação Blindado
 firebase.auth().onAuthStateChanged(async (user) => {
-        if (user) {
-            userLogado = user;
-            // Busca o perfil do usuário logado
+    if (user) {
+        userLogado = user;
+        try {
             const snap = await database.ref(`users/${user.uid}/perfil`).once('value');
             const perfil = snap.val();
 
+            // Se o perfil existe mas não tem username, manda finalizar
             if (!perfil || !perfil.username) {
+                document.getElementById('auth-container').style.display = 'flex';
                 document.getElementById('card-auth').style.display = 'none';
                 document.getElementById('card-finalizar').style.display = 'block';
             } else {
+                // SUCESSO: Esconde o auth e inicia o app
                 document.getElementById('auth-container').style.display = 'none';
                 initApp(perfil);
             }
-        } else {
-            userLogado = null;
-            document.getElementById('auth-container').style.display = 'flex';
-            document.getElementById('card-auth').style.display = 'block';
-            document.getElementById('card-finalizar').style.display = 'none';
+        } catch (e) {
+            console.error("Erro ao buscar perfil inicial:", e);
+            mostrarAlerta("Erro de conexão. Recarregue a página.", "❌");
         }
-    });
+    } else {
+        userLogado = null;
+        document.getElementById('auth-container').style.display = 'flex';
+        document.getElementById('card-auth').style.display = 'block';
+        document.getElementById('card-finalizar').style.display = 'none';
+    }
+});
 
 async function executarAuth() {
     const email = document.getElementById('auth-email').value;
@@ -2108,23 +2116,38 @@ function toggleAuthMode() {
 
 // Inicialização correta do App
 function initApp(perfil) {
+    // 1. Preenchimento imediato da memória e do Header (Fim do "Carregando...")
     dadosUsuario = perfil;
     
-    // VIGIA MESTRE: Mantém seus dados de seguindo sempre atualizados
+    const elRealName = document.getElementById('user-real-name-header');
+    const elBadge = document.getElementById('user-badge');
+    const elImg = document.getElementById('img-perfil-header');
+    const elEmoji = document.getElementById('emoji-perfil-header');
+
+    if(elRealName) elRealName.innerText = perfil.nome || "Viajante";
+    if(elBadge) elBadge.innerText = `@${perfil.username}`;
+
+    if (perfil.foto && elImg) {
+        elImg.src = perfil.foto;
+        elImg.style.display = "block";
+        if(elEmoji) elEmoji.style.display = "none";
+    }
+
+    // 2. VIGIA MESTRE: Mantém seus dados de amizade vivos
     database.ref(`users/${userLogado.uid}/seguindo`).on('value', snap => {
         dadosUsuario.seguindo = snap.val() || {};
     });
 
+    // 3. Inicia as notificações e entra no seu próprio perfil (Mapa/Timeline)
     escutarNotificacoes(); 
-
-    // O verPerfil inicia o fluxo reativo para o seu próprio perfil
     verPerfil(userLogado.uid);
     
+    // 4. Vigia viagens para conquistas
     database.ref(`users/${userLogado.uid}/viagens`).on('value', (snapshot) => {
         verificarNovasConquistas();
     });
 
-    init(); 
+    init(); // Mapa SVG
 }
 
 // A função init() deve ser chamada apenas dentro do initApp ou após o login
