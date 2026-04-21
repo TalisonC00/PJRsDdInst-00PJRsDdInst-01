@@ -2071,20 +2071,42 @@ async function mostrarListaConexoes(tipo) {
         
 async function interagirNaLista(uidAlvo, btn) {
     if (btn.innerText === "SEGUINDO") {
-        // Lógica de Unfollow (Opcional, mas bom ter)
-        if (confirm("Deseja parar de seguir?")) {
-            await database.ref(`users/${userLogado.uid}/seguindo/${uidAlvo}`).remove();
-            await database.ref(`users/${uidAlvo}/seguidores/${userLogado.uid}`).remove();
-            delete dadosUsuario.seguindo[uidAlvo];
-            btn.innerText = "SEGUIR";
-            btn.className = "btn-mini-acao btn-seguir";
-        }
-    } else {
-        // Chama a nossa função principal de envio que já trata Público/Privado
-        await enviarSolicitacao(uidAlvo, btn);
+        const modal = document.getElementById('custom-confirm');
+        const btnSim = document.getElementById('btn-confirmar');
+        const btnNao = document.getElementById('btn-cancelar');
         
-        // Se a enviarSolicitacao detectou que é público, ela já mudou o texto.
-        // Se for privado, ela mudou para "ENVIADO".
+        document.getElementById('confirm-msg').innerText = `Deseja parar de seguir este viajante?`;
+        modal.style.display = 'flex';
+        
+        // Se clicar em cancelar
+        btnNao.onclick = () => { modal.style.display = 'none'; };
+        
+        // Se confirmar a remoção
+        btnSim.onclick = async () => {
+            try {
+                await database.ref(`users/${userLogado.uid}/seguindo/${uidAlvo}`).remove();
+                await database.ref(`users/${uidAlvo}/seguidores/${userLogado.uid}`).remove();
+                
+                if (dadosUsuario.seguindo) delete dadosUsuario.seguindo[uidAlvo];
+                
+                btn.innerText = "SEGUIR";
+                btn.className = "btn-mini-acao btn-seguir";
+                
+                modal.style.display = 'none';
+                mostrarAlerta("Você parou de seguir.", "👣");
+                
+                // Se estiver visualizando o perfil detalhado, atualiza os números na tela
+                if (perfilEmFoco && perfilEmFoco.uid === uidAlvo) {
+                    verPerfil(uidAlvo);
+                }
+            } catch (e) {
+                console.error(e);
+                mostrarAlerta("Erro ao processar.", "❌");
+            }
+        };
+    } else {
+        // Chama a função principal que já trata perfil Público vs Privado
+        await enviarSolicitacao(uidAlvo, btn);
     }
 }
 // Função para seguir/parar de seguir diretamente da lista
