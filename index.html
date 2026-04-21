@@ -156,7 +156,7 @@
    <div class="header" style="background: #fff; padding: 10px 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); position: relative; z-index: 100;">
     <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 100%;">
         
-        <div id="user-info-top" onclick="abrirVisualizacaoPerfil()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <div id="verPerfil" onclick="abrirVisualizacaoPerfil()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
             <div style="width: 32px; height: 32px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--sky); flex-shrink: 0;">
                 <img id="img-perfil-header" style="width:100%; height:100%; object-fit:cover; display:none;">
                 <span id="emoji-perfil-header">👤</span>
@@ -496,27 +496,19 @@ async function salvarPerfilFinal() {
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
 async function verPerfil(uidAlvo) {
     try {
+        // 1. Limpeza total de listeners antigos para evitar sobreposição de dados
         if (listenerPerfilAtivo) listenerPerfilAtivo.off();
         if (listenerSeguidoresAtivo) listenerSeguidoresAtivo.off();
         if (listenerSeguindoAtivo) listenerSeguindoAtivo.off();
 
         const isOwner = (uidAlvo === userLogado.uid);
 
-        // --- CONTROLE DE VISIBILIDADE DAS ABAS (OCULTAR) ---
-        const btnReg = document.getElementById('btn-nav-registro');
-        const btnGas = document.getElementById('btn-nav-gastos');
-        const btnHome = document.getElementById('btn-nav-home');
+        // 2. Controle de botões da Nav (Registro/Gastos somem se o perfil não for seu)
+        document.getElementById('btn-nav-registro').style.display = isOwner ? "block" : "none";
+        document.getElementById('btn-nav-gastos').style.display = isOwner ? "block" : "none";
+        document.getElementById('btn-nav-home').style.display = isOwner ? "none" : "block";
 
-        if (isOwner) {
-            if (btnReg) btnReg.style.display = "block";
-            if (btnGas) btnGas.style.display = "block";
-            if (btnHome) btnHome.style.display = "none";
-        } else {
-            if (btnReg) btnReg.style.display = "none";
-            if (btnGas) btnGas.style.display = "none";
-            if (btnHome) btnHome.style.display = "block";
-        }
-
+        // 3. Busca dados do perfil alvo
         listenerPerfilAtivo = database.ref(`users/${uidAlvo}/perfil`);
         listenerPerfilAtivo.on('value', async (snap) => {
             const p = snap.val();
@@ -524,35 +516,33 @@ async function verPerfil(uidAlvo) {
             
             perfilEmFoco = { uid: uidAlvo, ...p };
 
-            // Ouvinte de SEGUIDORES (Reatividade estilo Instagram)
-            listenerSeguidoresAtivo = database.ref(`users/${uidAlvo}/seguidores`);
-            listenerSeguidoresAtivo.on('value', sSnap => {
-                const nSeguidores = sSnap.val() ? Object.keys(sSnap.val()).length : 0;
+            // 4. Busca viagens do alvo (Isso altera o mapa e a timeline)
+            database.ref(`users/${uidAlvo}/viagens`).on('value', vSnap => {
+                const viagens = vSnap.val() || {};
                 
-                listenerSeguindoAtivo = database.ref(`users/${uidAlvo}/seguindo`);
-                listenerSeguindoAtivo.on('value', sgSnap => {
-                    const nSeguindo = sgSnap.val() ? Object.keys(sgSnap.val()).length : 0;
-                    
-                    database.ref(`users/${uidAlvo}/viagens`).on('value', vSnap => {
-                        const viagens = vSnap.val() || {};
-                        if(!isOwner) dbGlobal = viagens; // Troca o dbGlobal para o mapa do alvo
+                // CRITICAL: Atualiza o banco global com as viagens do perfil que estamos vendo
+                dbGlobal = viagens; 
 
+                // 5. Busca contadores (Seguidores/Seguindo)
+                database.ref(`users/${uidAlvo}/seguidores`).once('value', sSnap => {
+                    const nSeguidores = sSnap.val() ? Object.keys(sSnap.val()).length : 0;
+                    
+                    database.ref(`users/${uidAlvo}/seguindo`).once('value', sgSnap => {
+                        const nSeguindo = sgSnap.val() ? Object.keys(sgSnap.val()).length : 0;
                         const nEstados = Object.keys(viagens).length;
 
-                        // Renderiza a interface detalhada com os números fresquinhos
+                        // Renderiza a interface
                         abrirVisualizacaoPerfil(perfilEmFoco, nSeguidores, nSeguindo, nEstados);
-                        atualizarInterface();
-                        renderTimeline();
+                        atualizarInterface(); // Pinta o mapa
+                        renderTimeline();    // Monta a timeline do alvo
                     });
                 });
             });
         });
 
         fecharPopup();
-        trocarAba('mapa', document.querySelectorAll('.btn-aba')[1]);
-
     } catch (error) {
-        console.error("Erro verPerfil:", error);
+        console.error("Erro ao carregar perfil:", error);
     }
 }
         
