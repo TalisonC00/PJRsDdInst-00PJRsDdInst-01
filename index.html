@@ -2146,24 +2146,54 @@ function toggleAuthMode() {
 
 // Inicialização correta do App
 function initApp(perfil) {
+    // 1. Preenchimento imediato da memória e do Header (Fim do "Carregando...")
     dadosUsuario = perfil;
     atualizarHeader(perfil);
     
-    // 1. VIGIA MESTRE: Mantém seus dados de amizade vivos (essencial para o Feed)
+    const elRealName = document.getElementById('user-real-name-header');
+    const elBadge = document.getElementById('user-badge');
+    const elImg = document.getElementById('img-perfil-header');
+    const elEmoji = document.getElementById('emoji-perfil-header');
+
+    if(elRealName) elRealName.innerText = perfil.nome || "Viajante";
+    if(elBadge) elBadge.innerText = `@${perfil.username}`;
+
+    if (perfil.foto && elImg) {
+        elImg.src = perfil.foto;
+        elImg.style.display = "block";
+        if(elEmoji) elEmoji.style.display = "none";
+    }
+
+    // 2. VIGIA MESTRE: Mantém seus dados de amizade vivos
     database.ref(`users/${userLogado.uid}/seguindo`).on('value', snap => {
         dadosUsuario.seguindo = snap.val() || {};
     });
 
-    // 2. SETUP INICIAL SILENCIOSO: Carrega seus dados apenas uma vez para o mapa
-    // Usamos .once para não interferir quando você visitar outros perfis depois
+    // 3. CARGA SILENCIOSA E REDIRECIONAMENTO PARA FEED
+    escutarNotificacoes(); 
+    
+    // Em vez de verPerfil (que força a tela de perfil), carregamos os dados 
+    // e forçamos a aba FEED como inicial.
     database.ref(`users/${userLogado.uid}/viagens`).once('value', snap => {
-        dbGlobal = snap.val() || {};
-        atualizarInterface(); 
+        dbGlobal = snap.val() || {}; // Alimenta o mapa silenciosamente
+        atualizarInterface();
+        
+        // Ativa visualmente a aba Feed
+        const btnFeed = document.querySelectorAll('.btn-aba')[0];
+        trocarAba('feed', btnFeed);
+    });
+    
+    // 4. Vigia viagens para conquistas (Mantém a funcionalidade preservada)
+    database.ref(`users/${userLogado.uid}/viagens`).on('value', (snapshot) => {
+        // Se houver mudança enquanto navega, atualiza o dbGlobal apenas se estiver no PRÓPRIO perfil
+        if (!perfilEmFoco || perfilEmFoco.uid === userLogado.uid) {
+            dbGlobal = snapshot.val() || {};
+            atualizarInterface();
+        }
         verificarNovasConquistas();
     });
 
-    escutarNotificacoes(); 
-    init(); // Inicia o SVG do Mapa
+    init(); // Mapa SVG
 
     // 3. INICIALIZAÇÃO NO FEED GLOBAL
     const btnFeed = document.querySelectorAll('.btn-aba')[0];
