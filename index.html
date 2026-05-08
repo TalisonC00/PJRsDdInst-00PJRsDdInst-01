@@ -94,33 +94,65 @@
 </head>
 <body>
 
-    <div id="auth-container" style="position:fixed; top:0; left:0; width:100%; height:100%; background:var(--sky); z-index:9000; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;">
-    <div class="card" id="card-auth" style="width:100%; max-width:360px; text-align:center;">
+    <div id="auth-container" style="position:fixed; top:0; left:0; width:100%; height:100%; background:var(--sky); z-index:9000; overflow-y:auto; padding:20px; box-sizing:border-box;">
+    
+    <!-- ETAPA 1: ESCOLHA DE PLANO -->
+    <div id="step-planos" class="card" style="max-width:500px; margin: 0 auto; text-align:center;">
         <h2 style="color:var(--primary); font-weight:800; margin-bottom:5px;">Ondeé 🌍</h2>
-        <p style="font-size:12px; color:var(--text-sub); margin-bottom:20px;"> É Brasil!</p>
-        
-        <div id="inputs-auth">
-            <input type="email" id="auth-email" placeholder="E-mail" style="margin-bottom:10px;">
-            <input type="password" id="auth-senha" placeholder="Senha" style="margin-bottom:10px;">
-            
-            <div id="campos-registro" style="display:none;">
-                <input type="text" id="reg-nome" placeholder="Nome" style="margin-bottom:10px;">
-                <select id="reg-sexo" style="margin-bottom:10px;">
-                    <option value="" disabled selected>Sexo</option>
-                    <option value="M">Masculino</option>
-                    <option value="F">Feminino</option>
-                    <option value="O">Outro</option>
-                </select>
-                <select id="reg-tipo" style="margin-bottom:10px;">
-                    <option value="publico">🌍 Viajante Brasil (Público)</option>
-                    <option value="privado">🔒 Viajante Local (Privado)</option>
-                </select>
+        <p style="font-size:13px; color:var(--text-sub); margin-bottom:25px;">Sua jornada profissional pelo Brasil começa aqui.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+            <!-- Plano Gratuito -->
+            <div onclick="selecionarPlano('gratuito')" id="card-free" class="plan-card" style="border: 2px solid #e2e8f0; padding: 20px; border-radius: 20px; cursor: pointer; background: #fff; text-align: left;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <b style="font-size:16px;">Viajante Comum</b>
+                    <span class="pill" style="background:#f1f5f9; color:var(--text-sub);">GRÁTIS</span>
+                </div>
+                <ul style="font-size: 11px; color: var(--text-sub); margin: 10px 0; padding-left: 15px;">
+                    <li>1 Pergunta Concierge/dia</li>
+                    <li>Mapa do Brasil (Visualização Simples)</li>
+                    <li>4 fotos e 2 vídeos por viagem</li>
+                </ul>
             </div>
-            
-            <button class="btn-acao" onclick="executarAuth()" id="btn-auth-principal">Entrar</button>
-            <p id="toggle-text" style="font-size:11px; margin-top:15px; cursor:pointer; font-weight:700;" onclick="toggleAuthMode()">Não tem conta? Cadastre-se</p>
+
+            <!-- Plano Pago -->
+            <div onclick="selecionarPlano('pago')" id="card-pago" class="plan-card" style="border: 2px solid #e2e8f0; padding: 20px; border-radius: 20px; cursor: pointer; background: #fff; text-align: left; position: relative;">
+                <span style="position:absolute; top:-10px; right:15px; background:var(--primary); color:white; font-size:9px; padding:3px 10px; border-radius:10px; font-weight:800;">PASSAPORTE OURO 👑</span>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <b style="font-size:16px; color:var(--primary);">Nômade Premium</b>
+                    <b style="font-size:14px;">R$ 19,90<small>/mês</small></b>
+                </div>
+                <ul style="font-size: 11px; color: var(--text-sub); margin: 10px 0; padding-left: 15px;">
+                    <li><b>Concierge & Roteiros Ilimitados</b></li>
+                    <li>Vídeo IA Personalizado por região</li>
+                    <li>Mapa Mundi e Backup Ilimitado (R2)</li>
+                    <li>Selo de Verificação Ouro</li>
+                </ul>
+            </div>
         </div>
+
+        <button class="btn-acao" id="btn-proximo-plano" onclick="irParaAuth()" style="margin-top:20px; opacity: 0.5;" disabled>Continuar</button>
     </div>
+
+    <!-- ETAPA 2: CADASTRO E PRIVACIDADE -->
+    <div id="step-auth" class="card" style="max-width:360px; margin: 0 auto; display:none;">
+        <h3 style="color:var(--primary); text-align:center;">Criar Perfil</h3>
+        <p id="txt-plano-confirmado" style="font-size:10px; text-align:center; font-weight:800; color:var(--money); margin-bottom:20px;"></p>
+        
+        <input type="email" id="auth-email" placeholder="E-mail" style="margin-bottom:10px;">
+        <input type="password" id="auth-senha" placeholder="Senha" style="margin-bottom:10px;">
+        <input type="text" id="reg-nome" placeholder="Nome Completo" style="margin-bottom:10px;">
+        
+        <label>Tipo de Perfil</label>
+        <select id="reg-tipo" style="margin-bottom:10px;">
+            <option value="publico">🌍 Viajante Brasil (Publico)</option>
+            <option value="privado">🔒 Viajante Local (Privado)</option>
+        </select>
+
+        <button class="btn-acao" onclick="executarAuth()" id="btn-auth-principal">Começar Jornada</button>
+        <p onclick="voltarParaPlanos()" style="font-size:11px; text-align:center; margin-top:15px; cursor:pointer; color:var(--text-sub);">← Alterar Plano</p>
+    </div>
+</div>
 
     <div class="card" id="card-finalizar" style="width:100%; max-width:360px; text-align:center; display:none;">
         <h3 style="color:var(--money);">Bem-vindo à rede! 🎉</h3>
@@ -359,6 +391,7 @@ let limiteAtualFeed = 11;
 let listenerPerfilAtivo = null;
 let listenerSeguidoresAtivo = null;
 let listenerSeguindoAtivo = null;
+let planoSelecionado = null;
     
 const REGIOES = {
         'NORTE': { icon: '🌳', color: '#22C55E', UFs: ['BRAC','BRAM','BRRR','BRRO','BRPA','BRAP','BRTO'], nomes: ['Acre','Amazonas','Roraima','Rondônia','Pará','Amapá','Tocantins'] },
@@ -492,7 +525,46 @@ async function salvarPerfilFinal() {
         mostrarAlerta("Erro ao finalizar perfil.", "❌");
     }
 }
-        
+
+function selecionarPlano(tipo) {
+    planoSelecionado = tipo;
+    // Reset visual
+    document.getElementById('card-free').style.borderColor = '#e2e8f0';
+    document.getElementById('card-pago').style.borderColor = '#e2e8f0';
+    
+    // Highlight selecionado
+    const card = tipo === 'gratuito' ? 'card-free' : 'card-pago';
+    document.getElementById(card).style.borderColor = 'var(--primary)';
+    
+    const btn = document.getElementById('btn-proximo-plano');
+    btn.disabled = false;
+    btn.style.opacity = "1";
+}
+
+function irParaAuth() {
+    document.getElementById('step-planos').style.display = 'none';
+    document.getElementById('step-auth').style.display = 'block';
+    document.getElementById('txt-plano-confirmado').innerText = planoSelecionado === 'pago' ? "VOCÊ ESCOLHEU: PASSAPORTE OURO 👑" : "VOCÊ ESCOLHEU: PLANO GRATUITO 🌍";
+}
+
+function voltarParaPlanos() {
+    document.getElementById('step-planos').style.display = 'block';
+    document.getElementById('step-auth').style.display = 'none';
+}
+
+// INTEGRAÇÃO COM IA - PASSAPORTE OURO (Conceitual para Node.js)
+async function gerarVideoComemorativo(uf) {
+    if (dadosUsuario.plano !== 'pago') return;
+
+    mostrarAlerta("IA preparando seu vídeo de conquista...", "🎬");
+    
+    // No modelo profissional (Node), aqui enviaríamos:
+    // 1. O UID do usuário (para saber o gosto dele)
+    // 2. A região conquistada
+    // 3. A IA (Veo) gera o vídeo e salva no R2
+    
+    console.log(`Gerando vídeo premium para a conquista de ${uf}...`);
+}
     // 3. FUNÇÕES DE SUPORTE E CELEBRAÇÃO
 async function verPerfil(uidAlvo) {
     dbGlobal = {};
@@ -1139,72 +1211,112 @@ function renderJornada() {
         }
         document.getElementById('grid-conquistas').innerHTML = html;
     }
+async function uploadMidiaParaR2(arquivo, userId) {
+    try {
+        // 1. Pede autorização ao seu servidor Node.js
+        const resposta = await fetch('http://localhost:3000/api/get-upload-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fileName: arquivo.name || `midia_${Date.now()}`,
+                contentType: arquivo.type,
+                user_id: userId
+            })
+        });
 
+        if (!resposta.ok) throw new Error("Sem permissão para upload (Cota cheia?)");
+
+        const { uploadUrl, fileUrl } = await resposta.json();
+
+        // 2. Upload binário direto para Cloudflare R2
+        await fetch(uploadUrl, {
+            method: 'PUT',
+            body: arquivo, // Arquivo real vindo do input/blob
+            headers: { 'Content-Type': arquivo.type }
+        });
+
+        return fileUrl; // Retorna o link HTTPS final
+    } catch (error) {
+        console.error("Erro upload:", error);
+        return null;
+    }
+}
 async function salvarViagem() {
-    const elUf = document.getElementById('sel-uf'), 
-          elCidade = document.getElementById('txt-cidade'), 
-          elData = document.getElementById('txt-data'), 
-          elHosp = document.getElementById('v-hosp'), 
-          elTrans = document.getElementById('v-trans'), 
-          elAlime = document.getElementById('v-alime'), 
-          elAtrac = document.getElementById('v-atrac'), 
+    const elUf = document.getElementById('sel-uf'),
+          elCidade = document.getElementById('txt-cidade'),
+          elData = document.getElementById('txt-data'),
+          elHosp = document.getElementById('v-hosp'),
+          elTrans = document.getElementById('v-trans'),
+          elAlime = document.getElementById('v-alime'),
+          elAtrac = document.getElementById('v-atrac'),
           elPraia = document.getElementById('chk-praia');
 
+    // Validações básicas (Mantidas)
     if (!userLogado) return mostrarAlerta("Você precisa estar logado.", "🔒");
     if (!elCidade.value.trim()) return mostrarAlerta("Digite o nome da cidade.", "📍");
     if (!elData.value) return mostrarAlerta("Data é obrigatória.", "📅");
     
-    // VERIFICAÇÃO DE FOTOS AJUSTADAS
-    if (imagensAjustadas.length === 0) return mostrarAlerta("Adicione e ajuste ao menos uma foto!", "📸");
+    // Pegamos os arquivos brutos do input (filaDeFotos que você já tem no Cropper)
+    // Se estiver usando os Blobs recortados do Cropper:
+    if (imagensAjustadas.length === 0) return mostrarAlerta("Ajuste ao menos uma foto!", "📸");
 
-    if (!dadosUsuario) {
-        const snap = await database.ref(`users/${userLogado.uid}/perfil`).once('value');
-        dadosUsuario = snap.val();
+    // Lógica de Cota (Funcionalidade de Monetização)
+    const limiteFotos = dadosUsuario.plano === 'pago' ? 999 : 4;
+    if (imagensAjustadas.length > limiteFotos) {
+        return mostrarAlerta(`No plano Gratuito você pode salvar até 4 fotos. Faça upgrade!`, "👑");
     }
 
-    const h = parseFloat(elHosp.value) || 0, 
-          t = parseFloat(elTrans.value) || 0, 
-          al = parseFloat(elAlime.value) || 0, 
-          at = parseFloat(elAtrac.value) || 0;
+    mostrarAlerta("Salvando memórias na nuvem...", "⏳");
 
-    const tripId = database.ref().child('posts').push().key;
-    const trip = { 
-        id: tripId,
-        uid: userLogado.uid,
-        username: dadosUsuario.username,
-        cidade: elCidade.value, 
-        uf: elUf.value, 
-        data: elData.value.split('-').reverse().join('/'), 
-        rawDate: elData.value, 
-        fotos: imagensAjustadas, // USA AS FOTOS DO CROPPER AQUI
-        h: h, t: t, al: al, at: at, 
-        praia: elPraia.checked, 
-        total: h + t + al + at 
-    };
+    try {
+        // FAZ O UPLOAD DE CADA FOTO PARA O R2
+        const urlsFinais = [];
+        for (let imgBase64 of imagensAjustadas) {
+            // Converte base64 para Blob para um upload eficiente (não texto)
+            const blob = await fetch(imgBase64).then(res => res.blob());
+            const url = await uploadMidiaParaR2(blob, userLogado.uid);
+            if (url) urlsFinais.push(url);
+        }
 
-    let updates = {};
-    updates[`users/${userLogado.uid}/viagens/${elUf.value}/${tripId}`] = trip;
+        // PREPARA O OBJETO PARA O SUPABASE (PostgreSQL)
+        const novaViagem = {
+            user_id: userLogado.uid,
+            uf: elUf.value,
+            cidade: elCidade.value,
+            data_visita: elData.value,
+            fotos_urls: urlsFinais, // Agora salvamos apenas as URLs!
+            gastos_hotel: parseFloat(elHosp.value) || 0,
+            gastos_transporte: parseFloat(elTrans.value) || 0,
+            gastos_alimentacao: parseFloat(elAlime.value) || 0,
+            gastos_atracoes: parseFloat(elAtrac.value) || 0,
+            is_praia: elPraia.checked,
+            is_privado: dadosUsuario.traveler_type === 'privado'
+        };
 
-    // NOVIDADE: Usuário privado agora também posta no Feed Global 
-    // para que seus amigos consigam ver as atualizações na aba de aventuras.
-    updates[`feed_global/${tripId}`] = {
-        ...trip,
-        fotoPerfil: dadosUsuario.foto || '',
-        privado: dadosUsuario.tipo === 'privado' // Marcação de privacidade
-    };
+        // SALVA NO SUPABASE
+        const { error } = await supabase.from('viagens').insert([novaViagem]);
 
-    database.ref().update(updates).then(() => {
-        // Limpa os campos e o array de fotos
+        if (error) throw error;
+
+        // Limpeza de campos (Mantida)
         elCidade.value = ""; elData.value = ""; elHosp.value = ""; 
         elTrans.value = ""; elAlime.value = ""; elAtrac.value = ""; 
-        document.getElementById('inp-foto').value = ""; 
         elPraia.checked = false;
-        imagensAjustadas = []; // LIMPA AS FOTOS APÓS POSTAR
+        imagensAjustadas = []; 
         document.getElementById('preview-fotos-container').innerHTML = "";
-        
-        mostrarAlerta("Viagem salva na sua jornada!", "📌");
+
+        mostrarAlerta("Viagem salva com sucesso!", "📌");
         trocarAba('mapa', document.querySelectorAll('.btn-aba')[1]);
-    }).catch(e => mostrarAlerta("Erro ao salvar: " + e.message, "❌"));
+        
+        // Gatilho para o Passaporte Ouro (Vídeo IA)
+        if (dadosUsuario.plano === 'pago') {
+            gerarVideoComemorativo(elUf.value);
+        }
+
+    } catch (e) {
+        console.error(e);
+        mostrarAlerta("Erro ao salvar: " + e.message, "❌");
+    }
 }
         
 function removerViagem(uf, idFirebase, cidade) {
