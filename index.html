@@ -249,24 +249,26 @@ async function executarAuth() {
     const nome = document.getElementById('reg-nome').value;
     const tipo = document.getElementById('reg-tipo').value;
 
-    if (document.getElementById('auth-title').innerText === "Criar Conta") {
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) return mostrarAlerta(error.message, "❌");
-        
-        // Salva Perfil Inicial
-        await supabase.from('profiles').insert([{ 
-            id: data.user.id, 
-            full_name: nome, 
-            traveler_type: tipo,
-            plan_type: planoSelecionado,
-            expires_at: planoSelecionado === 'pago' ? new Date(Date.now() + 30*24*60*60*1000) : null
-        }]);
-    } else if (document.getElementById('auth-title').innerText === "Entrar") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return mostrarAlerta("Dados incorretos", "❌");
-    } else {
-        // Finalizar Cadastro (Username)
-        // Lógica de update profile...
+    try {
+        if (document.getElementById('auth-title').innerText === "Criar Conta") {
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            if (error) throw error;
+            
+            // Cria o perfil na tabela 'profiles' logo após o cadastro
+            await supabase.from('profiles').insert([{ 
+                id: data.user.id, 
+                full_name: nome, 
+                traveler_type: tipo,
+                plan_type: planoSelecionado,
+                username: "" // Será preenchido na tela de "Finalizar Cadastro"
+            }]);
+            mostrarAlerta("Conta criada! Verifique seu e-mail.", "📧");
+        } else {
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw new Error("E-mail ou senha incorretos.");
+        }
+    } catch (e) {
+        mostrarAlerta(e.message, "❌");
     }
 }
 
@@ -303,7 +305,17 @@ async function uploadParaR2(blob, userId) {
     await fetch(uploadUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': 'image/jpeg' } });
     return fileUrl;
 }
-
+function limparCampos() {
+    document.getElementById('txt-cidade').value = "";
+    document.getElementById('txt-data').value = "";
+    document.getElementById('v-hosp').value = "";
+    document.getElementById('v-trans').value = "";
+    document.getElementById('v-alime').value = "";
+    document.getElementById('v-atrac').value = "";
+    document.getElementById('chk-praia').checked = false;
+    imagensAjustadas = [];
+    document.getElementById('preview-fotos-container').innerHTML = "";
+}
 async function salvarViagem() {
     if (!userLogado) return;
     mostrarAlerta("Enviando para o R2...", "⏳");
