@@ -210,7 +210,7 @@
 // 1. CONFIGURAÇÃO SUPABASE
 const supabaseUrl = 'SUA_SUPABASE_URL';
 const supabaseKey = 'SUA_SUPABASE_ANON_KEY';
-const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 const API_URL = 'http://localhost:3000/api'; // Sua API Node.js
 
 // 2. VARIÁVEIS GLOBAIS
@@ -227,7 +227,7 @@ let dbGlobal = {}; // Viagens do perfil atual
 supabase.auth.onAuthStateChange(async (event, session) => {
     if (session) {
         userLogado = session.user;
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', userLogado.id).single();
+        const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', userLogado.id).single();
         
         if (!profile || !profile.username) {
             document.getElementById('auth-container').style.display = 'flex';
@@ -255,7 +255,7 @@ async function executarAuth() {
             if (error) throw error;
             
             // Cria o perfil na tabela 'profiles' logo após o cadastro
-            await supabase.from('profiles').insert([{ 
+            await supabaseClient.from('profiles').insert([{ 
                 id: data.user.id, 
                 full_name: nome, 
                 traveler_type: tipo,
@@ -338,7 +338,7 @@ async function salvarViagem() {
             is_praia: document.getElementById('chk-praia').checked
         };
 
-        const { error } = await supabase.from('viagens').insert([payload]);
+        const { error } = await supabaseClient.from('viagens').insert([payload]);
         if (error) throw error;
 
         // Gatilho de IA e Conquista no Servidor
@@ -369,7 +369,7 @@ async function initApp(perfil) {
 
 async function verPerfil(uidAlvo) {
     perfilEmFoco = uidAlvo;
-    const { data: viagens } = await supabase.from('viagens').select('*').eq('user_id', uidAlvo);
+    const { data: viagens } = await supabaseClient.from('viagens').select('*').eq('user_id', uidAlvo);
     dbGlobal = {};
     viagens.forEach(v => {
         if (!dbGlobal[v.uf]) dbGlobal[v.uf] = {};
@@ -1042,7 +1042,7 @@ async function salvarViagem() {
         };
 
         // SALVA NO SUPABASE
-        const { error } = await supabase.from('viagens').insert([novaViagem]);
+        const { error } = await supabaseClient.from('viagens').insert([novaViagem]);
 
         if (error) throw error;
 
