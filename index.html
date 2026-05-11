@@ -151,7 +151,31 @@
         <div id="timeline-list"></div>
     </div>
 </div>
+<div id="aba-jornada" class="aba">
+    <div class="card" style="border: 2px solid var(--sky); background: linear-gradient(to bottom, #ffffff, #f0f9ff);">
+        <h3 style="color: var(--primary); display: flex; align-items: center; gap: 8px; margin-top: 0;">
+            🤖 Concierge Ondeé
+            <span id="badge-cota" style="font-size: 9px; background: var(--sky); padding: 2px 8px; border-radius: 10px; color: var(--text-main);">1 RESTANTE</span>
+        </h3>
+        <p style="font-size: 11px; color: var(--text-sub); margin-bottom: 15px;">Dicas de roteiros, custos e segredos locais para sua próxima viagem.</p>
+        
+        <div id="chat-container" style="max-height: 200px; overflow-y: auto; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="background: #f1f5f9; padding: 10px; border-radius: 15px; font-size: 12px; align-self: flex-start; max-width: 80%;">
+                Olá! Para onde vamos hoje? Posso te ajudar a planejar seu roteiro ou calcular gastos.
+            </div>
+        </div>
 
+        <div style="display: flex; gap: 8px;">
+            <input type="text" id="input-concierge" placeholder="Ex: O que fazer em 3 dias no RJ?" style="flex: 1; font-size: 13px;">
+            <button onclick="perguntarAoConcierge()" id="btn-enviar-ia" style="background: var(--primary); color: white; border: none; width: 45px; height: 45px; border-radius: 14px; cursor: pointer; font-size: 18px;">➔</button>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+        <h3>🏆 Passaporte de Conquistas</h3>
+        <div class="badge-grid" id="grid-conquistas"></div>
+    </div>
+</div>
 <div id="aba-registro" class="aba">
     <div class="card">
         <h3>📍 Nova Viagem</h3>
@@ -430,7 +454,7 @@ async function initApp(perfil) {
 
 async function verPerfil(uidAlvo) {
     perfilEmFoco = uidAlvo;
-    const { data: viagens } = await supabaseClient.from('viagens').select('*').eq('user_id', uidAlvo);
+    const { data: viagens } = await sb.from('viagens').select('*').eq('user_id', uidAlvo);
     dbGlobal = {};
     viagens.forEach(v => {
         if (!dbGlobal[v.uf]) dbGlobal[v.uf] = {};
@@ -461,7 +485,66 @@ function atualizarInterface() {
     });
     document.getElementById('info').innerText = `${Object.keys(dbGlobal).length} ESTADOS CONQUISTADOS`;
 }
+async function perguntarAoConcierge() {
+    const input = document.getElementById('input-concierge');
+    const container = document.getElementById('chat-container');
+    const btn = document.getElementById('btn-enviar-ia');
+    const texto = input.value.trim();
 
+    if (!texto) return;
+
+    // 1. Interface: Desativa botão e mostra carregando
+    input.value = "";
+    btn.disabled = true;
+    btn.innerText = "⏳";
+    
+    // Adiciona a pergunta do usuário no chat
+    const msgUser = document.createElement('div');
+    msgUser.style = "background: var(--primary); color: white; padding: 10px; border-radius: 15px; font-size: 12px; align-self: flex-end; max-width: 80%;";
+    msgUser.innerText = texto;
+    container.appendChild(msgUser);
+    container.scrollTop = container.scrollHeight;
+
+    try {
+        // 2. Chamada para a sua API Node.js
+        const response = await fetch(`${API_URL}/concierge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                prompt: texto, 
+                user_id: userLogado.id 
+            })
+        });
+
+        const data = await response.json();
+
+        // 3. Trata Bloqueio de Cota (Plano Gratuito)
+        if (response.status === 403) {
+            mostrarAlerta(data.message, "👑");
+            const msgErro = document.createElement('div');
+            msgErro.style = "background: #fee2e2; color: #ef4444; padding: 10px; border-radius: 15px; font-size: 11px; font-weight: 700; text-align: center;";
+            msgErro.innerText = "Limite diário atingido. Faça upgrade!";
+            container.appendChild(msgErro);
+        } else {
+            // 4. Adiciona a resposta da IA no chat
+            const msgIA = document.createElement('div');
+            msgIA.style = "background: white; border: 1px solid #eee; padding: 10px; border-radius: 15px; font-size: 12px; align-self: flex-start; max-width: 85%; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05);";
+            msgIA.innerText = data.answer;
+            container.appendChild(msgIA);
+            
+            // Atualiza badge de cota se for gratuito
+            if (dadosUsuario.plan_type === 'gratuito') {
+                document.getElementById('badge-cota').innerText = "0 RESTANTE";
+            }
+        }
+    } catch (err) {
+        mostrarAlerta("O Concierge está offline. Tente em instantes.", "❌");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "➔";
+        container.scrollTop = container.scrollHeight;
+    }
+}
 // Lógica de Cropper, Alertas e Troca de Abas mantida igual à sua original, apenas apontando para as novas listas.
 function trocarAba(id, btn) {
     document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
@@ -1103,7 +1186,7 @@ async function salvarViagem() {
         };
 
         // SALVA NO SUPABASE
-        const { error } = await supabaseClient.from('viagens').insert([novaViagem]);
+        const { error } = await sb.from('viagens').insert([novaViagem]);
 
         if (error) throw error;
 
