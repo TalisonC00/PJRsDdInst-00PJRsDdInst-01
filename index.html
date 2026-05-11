@@ -210,14 +210,10 @@
 </div>
 
 <script>
-// 1. CONFIGURAÇÃO SUPABASE
-const supabaseUrl = 'SUA_SUPABASE_URL';
-const supabaseKey = 'SUA_SUPABASE_ANON_KEY';
-const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
-const API_URL = 'http://localhost:3000/api'; // Sua API Node.js
-
-// 2. VARIÁVEIS GLOBAIS
-let planoSelecionado = null;
+// ==========================================================
+// 1. VARIÁVEIS GLOBAIS (Sempre no topo para evitar Erros de Inicialização)
+// ==========================================================
+let planoSelecionado = null; // Movid para o topo!
 let userLogado = null;
 let dadosUsuario = null;
 let perfilEmFoco = null;
@@ -225,49 +221,69 @@ let imagensAjustadas = [];
 let filaDeFotos = [];
 let cropper;
 let controleMapa;
-let dbGlobal = {}; // Viagens do perfil atual
+let dbGlobal = {}; 
 
-// 4. LOGICA DE PLANOS
+// 2. CONFIGURAÇÃO SUPABASE (Substitua pelos seus dados reais)
+const SUB_URL = 'SUA_SUPABASE_URL';
+const SUB_KEY = 'SUA_SUPABASE_ANON_KEY';
+const sb = supabase.createClient(SUB_URL, SUB_KEY); 
+const API_URL = 'http://localhost:3000/api'; 
+
+// ==========================================================
+// 3. FUNÇÕES DE INTERFACE (ESCOLHA DE PLANO)
+// ==========================================================
 function selecionarPlano(tipo) {
     planoSelecionado = tipo;
     
-    // 1. Limpa a borda de TODOS os cards que tenham a classe 'plan-card'
+    // Limpa a seleção visual de todos
     document.querySelectorAll('.plan-card').forEach(card => {
         card.style.borderColor = '#eee';
+        card.style.boxShadow = 'none';
     });
 
-    // 2. Aplica a borda vermelha apenas no selecionado
+    // Destaca o selecionado
     const idAlvo = (tipo === 'gratuito') ? 'card-free' : 'card-pago';
-    document.getElementById(idAlvo).style.borderColor = 'var(--primary)';
+    const el = document.getElementById(idAlvo);
+    if(el) {
+        el.style.borderColor = 'var(--primary)';
+        el.style.boxShadow = '0 0 0 2px var(--primary)';
+    }
     
-    // 3. Ativa o botão de continuar
+    // Ativa o botão continuar
     const btn = document.getElementById('btn-proximo-plano');
     btn.disabled = false;
     btn.style.opacity = "1";
 }
-// Essa função precisa existir para o botão de voltar funcionar!
+
 function voltarParaPlanos() {
     document.getElementById('step-planos').style.display = 'block';
     document.getElementById('step-auth').style.display = 'none';
 }
-    
+
 function irParaAuth() {
+    if (!planoSelecionado) return;
     document.getElementById('step-planos').style.display = 'none';
     document.getElementById('step-auth').style.display = 'block';
     document.getElementById('auth-title').innerText = "Criar Conta";
 }
 
 function mostrarLogin() {
-    irParaAuth();
+    document.getElementById('step-planos').style.display = 'none';
+    document.getElementById('step-auth').style.display = 'block';
     document.getElementById('auth-title').innerText = "Entrar";
     document.getElementById('campos-registro').style.display = "none";
 }
 
-// 3. AUTENTICAÇÃO
-supabase.auth.onAuthStateChange(async (event, session) => {
+// ==========================================================
+// 4. AUTENTICAÇÃO E INICIALIZAÇÃO
+// ==========================================================
+
+// Observador do Supabase (Substitui o onAuthStateChanged do Firebase)
+sb.auth.onAuthStateChange(async (event, session) => {
     if (session) {
         userLogado = session.user;
-        const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', userLogado.id).single();
+        // Busca o perfil na tabela profissional do Supabase
+        const { data: profile, error } = await sb.from('profiles').select('*').eq('id', userLogado.id).single();
         
         if (!profile || !profile.username) {
             document.getElementById('auth-container').style.display = 'flex';
@@ -288,23 +304,23 @@ async function executarAuth() {
     const password = document.getElementById('auth-senha').value;
     const nome = document.getElementById('reg-nome').value;
     const tipo = document.getElementById('reg-tipo').value;
+    const title = document.getElementById('auth-title').innerText;
 
     try {
-        if (document.getElementById('auth-title').innerText === "Criar Conta") {
-            const { data, error } = await supabase.auth.signUp({ email, password });
+        if (title === "Criar Conta") {
+            const { data, error } = await sb.auth.signUp({ email, password });
             if (error) throw error;
             
-            // Cria o perfil na tabela 'profiles' logo após o cadastro
-            await supabaseClient.from('profiles').insert([{ 
+            // Cria o registro na tabela de perfis
+            await sb.from('profiles').insert([{ 
                 id: data.user.id, 
                 full_name: nome, 
                 traveler_type: tipo,
-                plan_type: planoSelecionado,
-                username: "" // Será preenchido na tela de "Finalizar Cadastro"
+                plan_type: planoSelecionado
             }]);
             mostrarAlerta("Conta criada! Verifique seu e-mail.", "📧");
         } else {
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const { error } = await sb.auth.signInWithPassword({ email, password });
             if (error) throw new Error("E-mail ou senha incorretos.");
         }
     } catch (e) {
@@ -312,32 +328,44 @@ async function executarAuth() {
     }
 }
 
-// 5. SALVAR VIAGEM (A Integração Profissional)
+// ==========================================================
+// 5. LÓGICA DE VIAGENS (Sincronizada com seu Node.js)
+// ==========================================================
+
 async function uploadParaR2(blob, userId) {
     const res = await fetch(`${API_URL}/get-upload-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: `img_${Date.now()}.jpg`, contentType: 'image/jpeg', user_id: userId, count_atual: imagensAjustadas.length })
+        body: JSON.stringify({ 
+            fileName: `img_${Date.now()}.jpg`, 
+            contentType: 'image/jpeg', 
+            user_id: userId, 
+            count_atual: imagensAjustadas.length 
+        })
     });
-    if (!res.ok) throw new Error("Cota atingida ou erro no servidor");
+    
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Erro no upload");
+    }
+
     const { uploadUrl, fileUrl } = await res.json();
-    await fetch(uploadUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': 'image/jpeg' } });
+    
+    // Upload binário direto para Cloudflare R2
+    await fetch(uploadUrl, { 
+        method: 'PUT', 
+        body: blob, 
+        headers: { 'Content-Type': 'image/jpeg' } 
+    });
+    
     return fileUrl;
 }
-function limparCampos() {
-    document.getElementById('txt-cidade').value = "";
-    document.getElementById('txt-data').value = "";
-    document.getElementById('v-hosp').value = "";
-    document.getElementById('v-trans').value = "";
-    document.getElementById('v-alime').value = "";
-    document.getElementById('v-atrac').value = "";
-    document.getElementById('chk-praia').checked = false;
-    imagensAjustadas = [];
-    document.getElementById('preview-fotos-container').innerHTML = "";
-}
+
 async function salvarViagem() {
-    if (!userLogado) return;
-    mostrarAlerta("Enviando para o R2...", "⏳");
+    if (!userLogado) return mostrarAlerta("Faça login primeiro.", "🔒");
+    if (imagensAjustadas.length === 0) return mostrarAlerta("Adicione fotos!", "📸");
+
+    mostrarAlerta("Salvando memórias na nuvem...", "⏳");
     
     try {
         const urls = [];
@@ -354,13 +382,14 @@ async function salvarViagem() {
             data_visita: document.getElementById('txt-data').value,
             fotos_urls: urls,
             gastos_hotel: parseFloat(document.getElementById('v-hosp').value) || 0,
-            is_praia: document.getElementById('chk-praia').checked
+            is_praia: document.getElementById('chk-praia').checked,
+            is_privado: dadosUsuario.traveler_type === 'privado'
         };
 
-        const { error } = await supabaseClient.from('viagens').insert([payload]);
+        const { error } = await sb.from('viagens').insert([payload]);
         if (error) throw error;
 
-        // Gatilho de IA e Conquista no Servidor
+        // Gatilho de IA e Conquista no Servidor Node.js
         const check = await fetch(`${API_URL}/finalizar-viagem`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -368,13 +397,26 @@ async function salvarViagem() {
         });
         const resIA = await check.json();
 
-        mostrarAlerta(resIA.conquista || "Viagem salva!", "🚩");
+        mostrarAlerta(resIA.conquista || "Viagem registrada com sucesso!", "🚩");
         limparCampos();
-        trocarAba('mapa', null);
-        initApp(dadosUsuario); // Recarrega interface
+        trocarAba('mapa', document.querySelectorAll('.btn-aba')[1]);
+        verPerfil(userLogado.id); // Recarrega o mapa
+
     } catch (e) {
         mostrarAlerta(e.message, "❌");
     }
+}
+
+function limparCampos() {
+    document.getElementById('txt-cidade').value = "";
+    document.getElementById('txt-data').value = "";
+    document.getElementById('v-hosp').value = "";
+    document.getElementById('v-trans').value = "";
+    document.getElementById('v-alime').value = "";
+    document.getElementById('v-atrac').value = "";
+    document.getElementById('chk-praia').checked = false;
+    imagensAjustadas = [];
+    document.getElementById('preview-fotos-container').innerHTML = "";
 }
 
 // 6. RENDERIZAÇÃO E INTERFACE (Mantidas e adaptadas para Supabase)
