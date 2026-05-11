@@ -217,6 +217,7 @@ const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 const API_URL = 'http://localhost:3000/api'; // Sua API Node.js
 
 // 2. VARIÁVEIS GLOBAIS
+let planoSelecionado = null;
 let userLogado = null;
 let dadosUsuario = null;
 let perfilEmFoco = null;
@@ -225,7 +226,42 @@ let filaDeFotos = [];
 let cropper;
 let controleMapa;
 let dbGlobal = {}; // Viagens do perfil atual
-let planoSelecionado = null;
+
+// 4. LOGICA DE PLANOS
+function selecionarPlano(tipo) {
+    planoSelecionado = tipo;
+    
+    // 1. Limpa a borda de TODOS os cards que tenham a classe 'plan-card'
+    document.querySelectorAll('.plan-card').forEach(card => {
+        card.style.borderColor = '#eee';
+    });
+
+    // 2. Aplica a borda vermelha apenas no selecionado
+    const idAlvo = (tipo === 'gratuito') ? 'card-free' : 'card-pago';
+    document.getElementById(idAlvo).style.borderColor = 'var(--primary)';
+    
+    // 3. Ativa o botão de continuar
+    const btn = document.getElementById('btn-proximo-plano');
+    btn.disabled = false;
+    btn.style.opacity = "1";
+}
+// Essa função precisa existir para o botão de voltar funcionar!
+function voltarParaPlanos() {
+    document.getElementById('step-planos').style.display = 'block';
+    document.getElementById('step-auth').style.display = 'none';
+}
+    
+function irParaAuth() {
+    document.getElementById('step-planos').style.display = 'none';
+    document.getElementById('step-auth').style.display = 'block';
+    document.getElementById('auth-title').innerText = "Criar Conta";
+}
+
+function mostrarLogin() {
+    irParaAuth();
+    document.getElementById('auth-title').innerText = "Entrar";
+    document.getElementById('campos-registro').style.display = "none";
+}
 
 // 3. AUTENTICAÇÃO
 supabase.auth.onAuthStateChange(async (event, session) => {
@@ -274,42 +310,6 @@ async function executarAuth() {
     } catch (e) {
         mostrarAlerta(e.message, "❌");
     }
-}
-
-// 4. LOGICA DE PLANOS
-function selecionarPlano(tipo) {
-    planoSelecionado = tipo;
-    
-    // 1. Limpa a borda de TODOS os cards que tenham a classe 'plan-card'
-    document.querySelectorAll('.plan-card').forEach(card => {
-        card.style.borderColor = '#eee';
-    });
-
-    // 2. Aplica a borda vermelha apenas no selecionado
-    const idAlvo = (tipo === 'gratuito') ? 'card-free' : 'card-pago';
-    document.getElementById(idAlvo).style.borderColor = 'var(--primary)';
-    
-    // 3. Ativa o botão de continuar
-    const btn = document.getElementById('btn-proximo-plano');
-    btn.disabled = false;
-    btn.style.opacity = "1";
-}
-// Essa função precisa existir para o botão de voltar funcionar!
-function voltarParaPlanos() {
-    document.getElementById('step-planos').style.display = 'block';
-    document.getElementById('step-auth').style.display = 'none';
-}
-    
-function irParaAuth() {
-    document.getElementById('step-planos').style.display = 'none';
-    document.getElementById('step-auth').style.display = 'block';
-    document.getElementById('auth-title').innerText = "Criar Conta";
-}
-
-function mostrarLogin() {
-    irParaAuth();
-    document.getElementById('auth-title').innerText = "Entrar";
-    document.getElementById('campos-registro').style.display = "none";
 }
 
 // 5. SALVAR VIAGEM (A Integração Profissional)
